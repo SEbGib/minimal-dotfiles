@@ -9,8 +9,8 @@ If you discover a security vulnerability in this dotfiles repository, please rep
 **DO NOT** open a public GitHub issue for security vulnerabilities.
 
 Instead:
-1. Open a [Security Advisory](https://github.com/YOUR_USERNAME/dotfiles/security/advisories/new)
-2. Or email: security@example.com (replace with your contact)
+1. Open a [Security Advisory](https://github.com/SEbGib/minimal-dotfiles/security/advisories/new)
+2. Or open a private issue on GitHub
 
 ### What to Include
 

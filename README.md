@@ -353,7 +353,7 @@ Thanks to all the open-source projects that make this possible!
 ## 🔗 Links
 
 - **Documentation:** See `/docs` directory (if created)
-- **Issues:** [GitHub Issues](https://github.com/YOUR_USERNAME/dotfiles/issues)
+- **Issues:** [GitHub Issues](https://github.com/SEbGib/minimal-dotfiles/issues)
 - **Security:** [SECURITY.md](SECURITY.md)
 
 ---

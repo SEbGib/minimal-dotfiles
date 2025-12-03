@@ -168,7 +168,7 @@ chmod +x ~/.local/share/chezmoi/run_once_*.sh
 
 ```bash
 # Use HTTPS instead of SSH
-chezmoi init https://github.com/YOUR_USERNAME/minimal-dotfiles.git
+chezmoi init https://github.com/SEbGib/minimal-dotfiles.git
 ```
 
 ### Templates Not Rendering
