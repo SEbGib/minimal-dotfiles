@@ -77,7 +77,7 @@ A clean, modern development environment setup for macOS and Linux with Neovim, t
 ### 1. Install Chezmoi + Dotfiles
 
 ```bash
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply https://github.com/YOUR_USERNAME/dotfiles.git
+sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply SEbGib/minimal-dotfiles
 ```
 
 ### 2. Configure Personal Info

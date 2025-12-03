@@ -22,10 +22,8 @@ Complete installation guide for minimal-dotfiles on macOS and Linux.
 ### One-Line Install
 
 ```bash
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply YOUR_GITHUB_USERNAME/minimal-dotfiles
+sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply SEbGib/minimal-dotfiles
 ```
-
-Replace `YOUR_GITHUB_USERNAME` with your GitHub username after forking this repo.
 
 ### Manual Install
 
@@ -34,7 +32,7 @@ Replace `YOUR_GITHUB_USERNAME` with your GitHub username after forking this repo
 curl -sfL https://git.io/chezmoi | sh
 
 # 2. Initialize and apply
-chezmoi init --apply YOUR_GITHUB_USERNAME/minimal-dotfiles
+chezmoi init --apply SEbGib/minimal-dotfiles
 
 # 3. Review changes (optional)
 chezmoi diff
