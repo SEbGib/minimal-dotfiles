@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# Development tools installation - Language-specific tools
+# This script handles the installation of development environments
+
+set -euo pipefail
+
+# ===== NODE.JS INSTALLATION =====
+install_nodejs() {
+    echo "📦 Installing Node.js..."
+
+    {{- if eq .chezmoi.os "darwin" }}
+    brew install node
+    {{- else if eq .chezmoi.os "linux" }}
+    if command -v apt &> /dev/null; then
+        # Node.js via NodeSource
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+        sudo apt install -y nodejs
+
+        # Configure npm for user installations
+        mkdir -p "$HOME/.npm-global"
+        npm config set prefix "$HOME/.npm-global"
+
+    elif command -v pacman &> /dev/null; then
+        sudo pacman -S --noconfirm nodejs npm
+    fi
+    {{- end }}
+
+    # Install global npm packages
+    if command -v npm &> /dev/null; then
+        echo "📦 Installing global npm packages..."
+        npm_packages=(
+            "typescript"
+            "ts-node"
+            "@types/node"
+            "eslint"
+            "prettier"
+            "nodemon"
+            "pm2"
+            "yarn"
+            "vercel"
+            "@anthropic-ai/claude-code"
+        )
+
+        for package in "${npm_packages[@]}"; do
+            echo "📦 Installing $package..."
+            npm install -g "$package" 2>/dev/null || echo "  Failed to install $package"
+        done
+    fi
+}
+
+# ===== PHP INSTALLATION =====
+install_php() {
+    echo "📦 Installing PHP..."
+
+    {{- if eq .chezmoi.os "darwin" }}
+    brew install php composer symfony-cli
+    {{- else if eq .chezmoi.os "linux" }}
+    if command -v apt &> /dev/null; then
+        sudo apt install -y php php-cli php-mbstring php-xml php-zip php-curl composer
+    elif command -v pacman &> /dev/null; then
+        sudo pacman -S --noconfirm php composer
+    fi
+    {{- end }}
+
+    # Install Symfony CLI if PHP is available
+    if command -v php &> /dev/null; then
+        if ! command -v symfony &> /dev/null; then
+            echo "📦 Installing Symfony CLI..."
+            curl -sS https://get.symfony.com/cli/installer | bash
+            sudo mv ~/.symfony*/bin/symfony /usr/local/bin/symfony 2>/dev/null || true
+        fi
+    fi
+}
+
+# ===== PYTHON INSTALLATION =====
+install_python() {
+    echo "📦 Installing Python tools..."
+
+    if command -v python3 &> /dev/null; then
+        echo "🐍 Setting up Python environment..."
+
+        {{- if eq .chezmoi.os "linux" }}
+        # Install pipx for isolated Python tool installations (PEP 668 compliant)
+        if ! command -v pipx &> /dev/null; then
+            if command -v apt &> /dev/null; then
+                sudo apt install -y pipx
+            elif command -v pacman &> /dev/null; then
+                sudo pacman -S --noconfirm python-pipx
+            fi
+        fi
+
+        # Ensure pipx path is available (manual PATH update, avoid pipx ensurepath pip dependency)
+        export PATH="$HOME/.local/bin:$PATH"
+
+        # Essential Python packages via pipx (CLI tools)
+        cli_tools=(
+            "black"
+            "flake8"
+            "mypy"
+        )
+
+        for tool in "${cli_tools[@]}"; do
+            echo "📦 Installing $tool..."
+            pipx install "$tool" 2>/dev/null || echo "  Failed to install $tool"
+        done
+
+        # Library packages via apt (pytest, requests) or venv when needed
+        if command -v apt &> /dev/null; then
+            sudo apt install -y python3-pytest python3-requests python3-pynvim 2>/dev/null || true
+        fi
+        {{- else if eq .chezmoi.os "darwin" }}
+        # macOS: Use pip with --user (no PEP 668 restrictions)
+        python3 -m pip install --user --upgrade pip
+
+        python_packages=(
+            "black"
+            "flake8"
+            "mypy"
+            "pytest"
+            "requests"
+            "pynvim"
+        )
+
+        for package in "${python_packages[@]}"; do
+            echo "📦 Installing $package..."
+            python3 -m pip install --user "$package" 2>/dev/null || echo "  Failed to install $package"
+        done
+        {{- end }}
+    fi
+}
+
+# ===== DOCKER INSTALLATION =====
+install_docker() {
+    echo "  Installing Docker..."
+
+    # Skip Docker installation in CI environments (no /dev/tty)
+    if [[ ! -c /dev/tty ]] && [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
+        echo "  Skipping Docker installation in CI environment"
+        return 0
+    fi
+
+    {{- if eq .chezmoi.os "darwin" }}
+    brew install docker docker-compose || echo "  Docker installation failed (non-critical)"
+    {{- else if eq .chezmoi.os "linux" }}
+    if command -v apt &> /dev/null; then
+        # Docker installation - allow failures as it's not critical
+        (
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt update
+            sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+            # Add user to docker group
+            sudo usermod -aG docker $USER
+            echo "  Please log out and back in for Docker permissions to take effect"
+        ) || echo "  Docker installation failed (non-critical)"
+    fi
+    {{- end }}
+}
+
+# ===== MAIN EXECUTION =====
+main() {
+    echo "  Starting development tools installation..."
+
+    install_nodejs
+    install_php
+    # install_python  # Disabled: Python tools installed manually via pipx when needed
+    install_docker
+
+    echo "  Development tools installation completed successfully"
+}
+
+# Run main function
+main
+
+# Explicitly exit with success status
+exit 0

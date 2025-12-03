@@ -1,0 +1,43 @@
+[data]
+   # CI environment detection with multiple methods
+   {{- $is_ci := or (env "CI") (env "GITHUB_ACTIONS") (env "CONTINUOUS_INTEGRATION") (eq .chezmoi.username "testuser") (eq .chezmoi.username "runner") }}
+
+   # Personal information - CI-safe with static defaults
+   # Edit these values after installation or set via environment variables
+   email = {{ if $is_ci }}"test-user@example.com"{{ else }}{{ env "GIT_USER_EMAIL" | default "your.email@example.com" | quote }}{{ end }}
+   name = {{ if $is_ci }}"Test User"{{ else }}{{ env "GIT_USER_NAME" | default "Your Name" | quote }}{{ end }}
+   github_username = {{ if $is_ci }}"testuser"{{ else }}{{ env "GITHUB_USERNAME" | default "your-github-username" | quote }}{{ end }}
+   
+   # Platform-specific emails (for git includeIf config)
+   # Set via environment variables: GIT_GITHUB_EMAIL, GIT_GITLAB_EMAIL
+   github_email = {{ if $is_ci }}"test-user@example.com"{{ else }}{{ env "GIT_GITHUB_EMAIL" | default (env "GIT_USER_EMAIL") | default "your.email@gmail.com" | quote }}{{ end }}
+   gitlab_email = {{ if $is_ci }}"test-user@example.com"{{ else }}{{ env "GIT_GITLAB_EMAIL" | default (env "GIT_USER_EMAIL") | default "your.email@company.com" | quote }}{{ end }}
+
+   # Machine setup configuration - completely safe for CI environments
+   {{- $personal := false }}
+   {{- $work := false }}
+
+   {{- if not $is_ci }}
+   {{-   if eq .chezmoi.os "darwin" }}
+   {{-     $personal = true }}
+   {{-   else if eq .chezmoi.os "linux" }}
+   {{-     $work = true }}
+   {{-   end }}
+   {{- end }}
+
+   # Machine type configuration
+   personal = {{ $personal }}
+   work = {{ $work }}
+
+   # Dual-machine setup detection
+   is_mac = {{ eq .chezmoi.os "darwin" }}
+   is_ubuntu = {{ eq .chezmoi.os "linux" }}
+
+   # SSH environment detection (for remote development)
+   ssh_client = {{ env "SSH_CLIENT" | default "" | quote }}
+   ssh_tty = {{ env "SSH_TTY" | default "" | quote }}
+   is_ssh = {{ if or (env "SSH_CLIENT") (env "SSH_TTY") }}true{{ else }}false{{ end }}
+
+# Template options for better error handling
+[template]
+    options = ["missingkey=default"]

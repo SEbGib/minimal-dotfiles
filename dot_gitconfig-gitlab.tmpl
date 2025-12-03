@@ -1,0 +1,5 @@
+# GitLab specific configuration
+{{- $email := "your.email@company.com" }}
+{{- if hasKey . "gitlab_email" }}{{ $email = .gitlab_email }}{{ else if hasKey . "email" }}{{ $email = .email }}{{ end }}
+[user]
+    email = {{ $email }}

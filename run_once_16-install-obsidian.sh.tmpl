@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Install Obsidian and setup vault
+
+set -euo pipefail
+
+echo "🧠 Installing Obsidian..."
+
+{{- if eq .chezmoi.os "darwin" }}
+# macOS - Install via Homebrew cask
+if ! command -v obsidian &> /dev/null; then
+    echo "📦 Installing Obsidian via Homebrew..."
+    brew install --cask obsidian
+else
+    echo "✅ Obsidian already installed"
+fi
+
+{{- else if eq .chezmoi.os "linux" }}
+# Linux - Install via Snap (most reliable for all distros)
+if ! command -v obsidian &> /dev/null; then
+    if command -v snap &> /dev/null; then
+        echo "📦 Installing Obsidian via Snap..."
+        sudo snap install obsidian --classic
+    else
+        echo "⚠️  Snap not available, using AppImage method..."
+
+        # Install FUSE library (required for AppImages)
+        if ! dpkg -l | grep -q libfuse2; then
+            echo "📦 Installing libfuse2 (required for AppImages)..."
+            sudo apt update && sudo apt install -y libfuse2
+        fi
+
+        # Create bin directory if it doesn't exist
+        mkdir -p "$HOME/.local/bin"
+
+        # Get latest version number from GitHub API
+        echo "🔍 Finding latest Obsidian version..."
+        LATEST_VERSION=$(curl -s https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+
+        # Detect architecture
+        ARCH=$(uname -m)
+        if [[ "$ARCH" == "aarch64" ]] || [[ "$ARCH" == "arm64" ]]; then
+            APPIMAGE_URL="https://github.com/obsidianmd/obsidian-releases/releases/download/v${LATEST_VERSION}/Obsidian-${LATEST_VERSION}-arm64.AppImage"
+        else
+            APPIMAGE_URL="https://github.com/obsidianmd/obsidian-releases/releases/download/v${LATEST_VERSION}/Obsidian-${LATEST_VERSION}.AppImage"
+        fi
+
+        echo "📥 Downloading Obsidian v${LATEST_VERSION} from GitHub..."
+        curl -L "$APPIMAGE_URL" -o "$HOME/.local/bin/obsidian.appimage"
+        chmod +x "$HOME/.local/bin/obsidian.appimage"
+
+        # Create wrapper script to bypass AppImage sandbox issues
+        cat > "$HOME/.local/bin/obsidian" <<'WRAPPER'
+#!/bin/bash
+# Obsidian launcher wrapper - bypasses sandbox issues with AppImages
+exec ~/.local/bin/obsidian.appimage --no-sandbox "$@"
+WRAPPER
+        chmod +x "$HOME/.local/bin/obsidian"
+
+        # Create desktop entry
+        mkdir -p "$HOME/.local/share/applications"
+        cat > "$HOME/.local/share/applications/obsidian.desktop" <<EOF
+[Desktop Entry]
+Name=Obsidian
+Comment=A powerful knowledge base
+Exec=$HOME/.local/bin/obsidian %u
+Terminal=false
+Type=Application
+Icon=obsidian
+Categories=Office;TextEditor;
+MimeType=x-scheme-handler/obsidian;
+StartupWMClass=obsidian
+EOF
+
+        echo "✅ Obsidian v${LATEST_VERSION} AppImage installed to ~/.local/bin/obsidian"
+        echo "  Note: AppImages require libfuse2 to run"
+    fi
+else
+    echo "✅ Obsidian already installed"
+fi
+{{- end }}
+
+# Verify installation
+if command -v obsidian &> /dev/null; then
+    echo "✅ Obsidian installation verified"
+    obsidian --version || echo "  (Obsidian installed, version check not available)"
+else
+    echo "⚠️  Obsidian installation could not be verified"
+    echo ""
+    echo "Manual installation options:"
+    echo "1. Snap: sudo snap install obsidian --classic"
+    echo "2. Download from: https://obsidian.md/download"
+fi
+
+echo ""
+echo "🎉 Obsidian installation complete!"
+echo ""
+echo "Next steps:"
+echo "1. Launch Obsidian: obsidian"
+echo "2. Open vault at: ~/Obsidian/Dev"
+echo "3. Read QUICK_START.md in the vault"

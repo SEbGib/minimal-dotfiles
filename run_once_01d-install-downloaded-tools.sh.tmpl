@@ -1,0 +1,333 @@
+#!/usr/bin/env bash
+# Downloaded tools installation - Tools from GitHub releases and external sources
+# This script handles parallel downloads and installations for better performance
+
+set -euo pipefail
+
+# ===== CONFIGURATION =====
+TEMP_DIR=$(mktemp -d)
+FAILED_DOWNLOADS=()
+MAX_PARALLEL_DOWNLOADS=3
+
+# ===== UTILITY FUNCTIONS =====
+download_with_retry() {
+    local url="$1"
+    local output="$2"
+    local max_retries=3
+    local retry=0
+
+    while [[ $retry -lt $max_retries ]]; do
+        echo "📥 Downloading $(basename "$output") (attempt $((retry + 1))/$max_retries)"
+
+        if curl -fsSL --connect-timeout 30 --max-time 300 "$url" -o "$output"; then
+            # Verify file is not empty
+            if [[ -s "$output" ]]; then
+                echo "  Downloaded: $(basename "$output")"
+                return 0
+            else
+                echo "  Empty file detected"
+            fi
+        fi
+
+        retry=$((retry + 1))
+        if [[ $retry -lt $max_retries ]]; then
+            echo "  Retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
+
+    FAILED_DOWNLOADS+=("$url")
+    echo "  Failed to download after $max_retries attempts: $url"
+    return 1
+}
+
+extract_archive() {
+    local archive="$1"
+    local destination="$2"
+
+    echo "📦 Extracting: $(basename "$archive")"
+
+    case "$archive" in
+        *.tar.gz|*.tgz)
+            tar -xzf "$archive" -C "$destination"
+            ;;
+        *.tar.bz2|*.tbz2)
+            tar -xjf "$archive" -C "$destination"
+            ;;
+        *.tar.xz)
+            tar -xJf "$archive" -C "$destination"
+            ;;
+        *.zip)
+            unzip -q "$archive" -d "$destination"
+            ;;
+        *)
+            echo "  Unsupported archive format: $archive"
+            return 1
+            ;;
+    esac
+}
+
+find_and_install_binary() {
+    local binary_name="$1"
+    local search_dir="$2"
+
+    echo "  Searching for $binary_name binary in $search_dir"
+
+    # Find the binary (might be at root or in subdirectory)
+    local binary_path
+    binary_path=$(find "$search_dir" -type f -name "$binary_name" -executable 2>/dev/null | head -1)
+
+    if [[ -n "$binary_path" && -f "$binary_path" ]]; then
+        echo "  Found binary at: $binary_path"
+        if sudo install "$binary_path" /usr/local/bin/ 2>/dev/null; then
+            echo "  Installed $binary_name to /usr/local/bin/"
+            return 0
+        else
+            echo "  Failed to install $binary_name"
+            return 1
+        fi
+    else
+        echo "  Could not find $binary_name binary"
+        return 1
+    fi
+}
+
+parallel_download() {
+    local -n downloads_ref="$1"
+    local semaphore_file="$TEMP_DIR/semaphore"
+    local max_jobs="$MAX_PARALLEL_DOWNLOADS"
+
+    # Create semaphore
+    touch "$semaphore_file"
+
+    for download in "${downloads_ref[@]}"; do
+        IFS='|' read -r url dest <<< "$download"
+
+        # Wait for available slot
+        while [[ $(ls "$semaphore_file" 2>/dev/null | wc -l) -ge $max_jobs ]]; do
+            sleep 0.1
+        done
+
+        # Create job marker
+        touch "$semaphore_file"
+
+        # Start download in background
+        (
+            download_with_retry "$url" "$dest"
+            rm -f "$semaphore_file"
+        ) &
+    done
+
+    # Wait for all downloads to complete
+    wait
+}
+
+# ===== TOOL INSTALLATION FUNCTIONS =====
+install_starship() {
+    echo "⭐ Installing Starship prompt..."
+
+    if ! command -v starship &> /dev/null; then
+        local starship_url="https://starship.rs/install.sh"
+        local installer="$TEMP_DIR/starship_install.sh"
+
+        if download_with_retry "$starship_url" "$installer"; then
+            chmod +x "$installer"
+            bash "$installer" -y || echo "  Starship installation failed"
+        fi
+    else
+        echo "  Starship already installed"
+    fi
+}
+
+install_lazygit() {
+    echo "  Installing Lazygit..."
+
+    if ! command -v lazygit &> /dev/null; then
+        local version
+        version=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -o '"tag_name": "v[^"]*' | cut -d'"' -f4 | sed 's/^v//')
+
+        if [[ -n "$version" ]]; then
+            local url="https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${version}_{{ .chezmoi.os }}_{{ .chezmoi.arch }}.tar.gz"
+            local archive="$TEMP_DIR/lazygit.tar.gz"
+
+            if download_with_retry "$url" "$archive"; then
+                extract_archive "$archive" "$TEMP_DIR"
+                sudo install "$TEMP_DIR/lazygit" /usr/local/bin/ 2>/dev/null || echo "  Lazygit installation failed"
+            fi
+        fi
+    else
+        echo "  Lazygit already installed"
+    fi
+}
+
+install_lazydocker() {
+    echo "  Installing Lazydocker..."
+
+    if ! command -v lazydocker &> /dev/null; then
+        local url="https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh"
+        local installer="$TEMP_DIR/lazydocker_install.sh"
+
+        if download_with_retry "$url" "$installer"; then
+            chmod +x "$installer"
+            bash "$installer" || echo "  Lazydocker installation failed"
+        fi
+    else
+        echo "  Lazydocker already installed"
+    fi
+}
+
+install_chezmoi() {
+    echo "  Installing Chezmoi..."
+
+    if ! command -v chezmoi &> /dev/null; then
+        local installer="$TEMP_DIR/chezmoi_install.sh"
+        
+        # Download installer first, then verify before executing
+        if download_with_retry "https://get.chezmoi.io" "$installer"; then
+            # Verify the script contains expected content
+            if grep -q "chezmoi" "$installer" && [[ -s "$installer" ]]; then
+                chmod +x "$installer"
+                sh "$installer" || echo "  Chezmoi installation failed"
+            else
+                echo "  Downloaded script appears invalid, skipping chezmoi installation"
+            fi
+        fi
+    else
+        echo "  Chezmoi already installed"
+    fi
+}
+
+install_rainfrog() {
+    echo "  Installing Rainfrog (database TUI)..."
+
+    if ! command -v rainfrog &> /dev/null; then
+        # Try installation script first
+        local url="https://raw.githubusercontent.com/achristmascarl/rainfrog/main/install.sh"
+        local installer="$TEMP_DIR/rainfrog_install.sh"
+
+        if download_with_retry "$url" "$installer"; then
+            chmod +x "$installer"
+            bash "$installer" || {
+                echo "  Install script failed, trying cargo..."
+                # Fallback to cargo if Rust is available
+                if command -v cargo &> /dev/null; then
+                    cargo install rainfrog || echo "  Rainfrog installation failed"
+                else
+                    echo "  Rust/cargo not available, skipping rainfrog"
+                fi
+            }
+        elif command -v cargo &> /dev/null; then
+            # Direct cargo install if download failed
+            echo "📦 Installing via cargo..."
+            cargo install rainfrog || echo "  Rainfrog installation failed"
+        fi
+    else
+        echo "  Rainfrog already installed"
+    fi
+}
+
+# ===== MAIN EXECUTION =====
+main() {
+    echo "  Starting downloaded tools installation..."
+    echo "  Working directory: $TEMP_DIR"
+
+    # Define parallel downloads for better performance
+    local parallel_downloads=(
+        {{- if eq .chezmoi.os "linux" }}
+        "https://github.com/eza-community/eza/releases/latest/download/eza_x86_64-unknown-linux-gnu.tar.gz|$TEMP_DIR/eza.tar.gz"
+        "https://github.com/sharkdp/bat/releases/latest/download/bat-v0.25.0-x86_64-unknown-linux-gnu.tar.gz|$TEMP_DIR/bat.tar.gz"
+        "https://github.com/sharkdp/fd/releases/latest/download/fd-v10.3.0-x86_64-unknown-linux-gnu.tar.gz|$TEMP_DIR/fd.tar.gz"
+        "https://github.com/dandavison/delta/releases/latest/download/delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz|$TEMP_DIR/delta.tar.gz"
+        {{- end }}
+    )
+
+    # Execute parallel downloads
+    if [[ ${#parallel_downloads[@]} -gt 0 ]]; then
+        echo "  Starting parallel downloads..."
+        parallel_download parallel_downloads
+    fi
+
+    # Install tools sequentially (safer for system modifications)
+    install_starship
+    install_lazygit
+    install_lazydocker
+    install_rainfrog
+    install_chezmoi
+
+    # Install downloaded tools
+    {{- if eq .chezmoi.os "linux" }}
+    echo "📦 Installing downloaded Linux tools..."
+
+    # Install eza
+    if ! command -v eza &> /dev/null; then
+        if [[ -f "$TEMP_DIR/eza.tar.gz" ]]; then
+            local eza_extract_dir="$TEMP_DIR/eza_extract"
+            mkdir -p "$eza_extract_dir"
+            extract_archive "$TEMP_DIR/eza.tar.gz" "$eza_extract_dir"
+            find_and_install_binary "eza" "$eza_extract_dir"
+        fi
+    else
+        echo "  eza already installed"
+    fi
+
+    # Install bat
+    if ! command -v bat &> /dev/null; then
+        if [[ -f "$TEMP_DIR/bat.tar.gz" ]]; then
+            local bat_extract_dir="$TEMP_DIR/bat_extract"
+            mkdir -p "$bat_extract_dir"
+            extract_archive "$TEMP_DIR/bat.tar.gz" "$bat_extract_dir"
+            find_and_install_binary "bat" "$bat_extract_dir"
+        fi
+    else
+        echo "  bat already installed"
+    fi
+
+    # Install fd
+    if ! command -v fd &> /dev/null; then
+        if [[ -f "$TEMP_DIR/fd.tar.gz" ]]; then
+            local fd_extract_dir="$TEMP_DIR/fd_extract"
+            mkdir -p "$fd_extract_dir"
+            extract_archive "$TEMP_DIR/fd.tar.gz" "$fd_extract_dir"
+            find_and_install_binary "fd" "$fd_extract_dir"
+        fi
+    else
+        echo "  fd already installed"
+    fi
+
+    # Install delta
+    if ! command -v delta &> /dev/null; then
+        if [[ -f "$TEMP_DIR/delta.tar.gz" ]]; then
+            local delta_extract_dir="$TEMP_DIR/delta_extract"
+            mkdir -p "$delta_extract_dir"
+            extract_archive "$TEMP_DIR/delta.tar.gz" "$delta_extract_dir"
+            find_and_install_binary "delta" "$delta_extract_dir"
+        fi
+    else
+        echo "  delta already installed"
+    fi
+    {{- end }}
+
+    # Report results
+    echo ""
+    if [[ ${#FAILED_DOWNLOADS[@]} -gt 0 ]]; then
+        echo "  Some downloads failed:"
+        for failed_url in "${FAILED_DOWNLOADS[@]}"; do
+            echo "   • $(basename "$failed_url")"
+        done
+        echo "  You can retry with: chezmoi apply"
+    fi
+
+    echo "  Downloaded tools installation completed"
+}
+
+# Cleanup on exit
+cleanup() {
+    [[ -d "$TEMP_DIR" ]] && rm -rf "$TEMP_DIR"
+}
+trap cleanup EXIT
+
+# Run main function
+main
+
+# Explicitly exit with success status
+exit 0

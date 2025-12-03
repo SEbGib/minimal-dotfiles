@@ -1,0 +1,148 @@
+# Variables d'environnement privées - Générées par Chezmoi
+# ⚠️ Ce fichier contient des informations sensibles
+
+# ===== SECURE API TOKENS =====
+# Load from environment variables (primary) or encrypted file (fallback)
+# Use the secrets management script to set these up securely
+
+# GitHub Token
+{{- if (env "GITHUB_TOKEN") }}
+export GITHUB_TOKEN="${GITHUB_TOKEN}"
+{{- else }}
+export GITHUB_TOKEN=""
+{{- end }}
+
+# OpenAI API Key
+{{- if (env "OPENAI_API_KEY") }}
+export OPENAI_API_KEY="${OPENAI_API_KEY}"
+{{- else }}
+export OPENAI_API_KEY=""
+{{- end }}
+
+# Notion API Token
+{{- if (env "NOTION_API_TOKEN") }}
+export NOTION_API_TOKEN="${NOTION_API_TOKEN}"
+{{- else }}
+export NOTION_API_TOKEN=""
+{{- end }}
+
+# Context7 API Key (OPTIONAL - Context7 works without authentication)
+# Get API key from https://context7.com for higher rate limits
+{{- if (env "CONTEXT7_API_KEY") }}
+export CONTEXT7_API_KEY="${CONTEXT7_API_KEY}"
+{{- else }}
+export CONTEXT7_API_KEY=""
+{{- end }}
+
+# Intelephense License Key
+{{- if (env "INTELEPHENSE_LICENSE_KEY") }}
+export INTELEPHENSE_LICENSE_KEY="${INTELEPHENSE_LICENSE_KEY}"
+{{- else }}
+export INTELEPHENSE_LICENSE_KEY=""
+{{- end }}
+
+# ===== MCP SECURITY CONFIGURATION =====
+# MCP Server Authentication Tokens loaded from secure sources above
+
+# MCP Security Settings
+export MCP_SECURITY_AUDIT_LOG="$HOME/.local/share/claude/audit.log"
+export MCP_MAX_EXECUTION_TIME="30000"
+export MCP_REQUIRE_APPROVAL="true"
+
+# MCP Network Security
+export MCP_ALLOWED_DOMAINS="api.notion.com,api.github.com,raw.githubusercontent.com,mcp.context7.com"
+export MCP_BLOCKED_COMMANDS="rm -rf,sudo,chmod 777,dd,mkfs"
+
+# MCP Token Rotation (set to rotate tokens monthly)
+export MCP_TOKEN_ROTATION_DAYS="30"
+export MCP_LAST_SECURITY_CHECK="$(date +%Y%m%d)"
+
+# ===== CONFIGURATION LOCALE =====
+{{- if (index . "work" | default false) }}
+# Configuration entreprise
+export COMPANY_VPN_CONFIG="~/.openconnect/company.conf"
+export KUBECONFIG="~/.kube/config"
+{{- end }}
+
+{{- if (index . "personal" | default false) }}
+# Configuration personnelle
+{{- if (env "PERSONAL_SERVER") }}
+export PERSONAL_SERVER="${PERSONAL_SERVER}"
+{{- else }}
+export PERSONAL_SERVER="user@myserver.com"
+{{- end }}
+
+{{- if (env "BACKUP_DESTINATION") }}
+export BACKUP_DESTINATION="${BACKUP_DESTINATION}"
+{{- else }}
+export BACKUP_DESTINATION="/path/to/backup"
+{{- end }}
+{{- end }}
+
+# ===== OUTILS DE DÉVELOPPEMENT =====
+# Node.js
+export NODE_ENV="development"
+export NPM_CONFIG_PREFIX="$HOME/.npm-global"
+
+# PHP
+{{- if lookPath "php" }}
+export COMPOSER_MEMORY_LIMIT=-1
+export PHP_IDE_CONFIG="serverName=localhost"
+{{- end }}
+
+# Python
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONUNBUFFERED=1
+
+# Go
+export GOPATH="$HOME/go"
+export GOBIN="$GOPATH/bin"
+
+# Rust
+export CARGO_HOME="$HOME/.cargo"
+
+# ===== CONFIGURATION TERMINAL =====
+# Historique
+export HISTSIZE=50000
+export SAVEHIST=50000
+export HISTFILE="$HOME/.zsh_history"
+
+# Éditeur par défaut
+export EDITOR="nvim"
+export VISUAL="nvim"
+
+# Pager
+export PAGER="less"
+export LESS="-R"
+
+# ===== SÉCURITÉ =====
+# Désactiver la télémétrie
+export DO_NOT_TRACK=1
+export HOMEBREW_NO_ANALYTICS=1
+export NEXT_TELEMETRY_DISABLED=1
+
+# ===== COULEURS =====
+# Support des couleurs dans les outils
+export FORCE_COLOR=1
+export CLICOLOR=1
+
+# ===== CHEMINS PERSONNALISÉS =====
+# Ajout des binaires locaux au PATH
+export PATH="$HOME/.local/bin:$PATH"
+{{- if eq .chezmoi.os "darwin" }}
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+{{- end }}
+
+# ===== CONFIGURATION SPÉCIFIQUE HOSTNAME =====
+{{- if eq .chezmoi.hostname "work-laptop" }}
+# Configuration spécifique pour le laptop de travail
+export WORK_MODE=1
+{{- else if eq .chezmoi.hostname "personal-desktop" }}
+# Configuration spécifique pour le desktop personnel
+export PERSONAL_MODE=1
+{{- end }}
+
+# ===== NOTES =====
+# Ce fichier est automatiquement sourcé par .zshrc
+# Pour ajouter des variables locales, utilisez ~/.env.local
+# Pour des secrets temporaires, utilisez : export VAR=value (session uniquement)

@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+
+# Zen Browser Transparency Setup Script
+# This script configures Zen Browser for transparency and adds the Transparent Zen add-on
+
+set -euo pipefail
+
+# Environment detection function for CI/Docker environments
+is_ci_environment() {
+    [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]] ||
+    [[ -n "${DOCKER_CONTAINER:-}" ]] || [[ -f /.dockerenv ]] ||
+    [[ -n "${DEBIAN_FRONTEND:-}" ]] || [[ "${USER:-}" == "testuser" ]] ||
+    [[ "$(whoami)" == "root" ]] || [[ -n "${BUILD_ID:-}" ]] ||
+    [[ -n "${JENKINS_URL:-}" ]] || [[ -n "${TRAVIS:-}" ]] || [[ -n "${CIRCLECI:-}" ]] ||
+    [[ ! -t 0 ]]  # Not a terminal (non-interactive)
+}
+
+echo "  Configuration de la transparence pour Zen Browser..."
+
+# Early exit for CI environments to prevent hanging
+if is_ci_environment; then
+    echo "  Skipping Zen Browser setup in automated environment (non-critical)"
+    echo "  To configure Zen Browser transparency later, run this script manually after installing Zen Browser"
+    exit 0
+fi
+
+# Check if Zen Browser is installed
+if [[ ! -d "$HOME/Applications/Zen" && ! -d "/Applications/Zen.app" ]]; then
+    if is_ci_environment; then
+        echo "  Skipping Zen Browser setup in automated environment (non-critical)"
+        echo "  To configure Zen Browser transparency later, run this script manually after installing Zen Browser"
+        exit 0
+    else
+        echo "  Zen Browser n'est pas installé (non-critical)"
+        echo "  Install Zen Browser first, then run: chezmoi apply --force"
+        exit 0
+    fi
+fi
+
+# Function to find the active Zen Browser profile directory
+get_zen_profile_dir() {
+    local zen_profiles_dir=""
+
+    # Detect OS and set appropriate profile directory
+    case "$(uname)" in
+        "Darwin")
+            # macOS: Application Support directory
+            zen_profiles_dir="$HOME/Library/Application Support/zen/Profiles"
+            ;;
+        "Linux")
+            # Linux: Follow XDG Base Directory specification
+            local xdg_data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+            zen_profiles_dir="$xdg_data_home/zen/Profiles"
+
+            # Alternative common Linux locations
+            if [[ ! -d "$zen_profiles_dir" ]]; then
+                if [[ -d "$HOME/.zen/Profiles" ]]; then
+                    zen_profiles_dir="$HOME/.zen/Profiles"
+                elif [[ -d "$HOME/.config/zen/Profiles" ]]; then
+                    zen_profiles_dir="$HOME/.config/zen/Profiles"
+                fi
+            fi
+            ;;
+        "Windows"*|"MINGW"*|"MSYS"*)
+            # Windows: AppData directory
+            zen_profiles_dir="$APPDATA/zen/Profiles"
+            ;;
+        *)
+            # Fallback for unknown OS
+            zen_profiles_dir="$HOME/.zen/Profiles"
+            ;;
+    esac
+
+    # Check if Zen profiles directory exists
+    if [[ -d "$zen_profiles_dir" ]]; then
+        # Find the default profile (usually contains "Default" in name)
+        local default_profile=$(ls "$zen_profiles_dir" 2>/dev/null | grep -i default | head -1)
+        if [[ -n "$default_profile" ]]; then
+            echo "$zen_profiles_dir/$default_profile"
+            return 0
+        fi
+    fi
+
+    # Fallback based on OS
+    case "$(uname)" in
+        "Darwin")
+            echo "$HOME/.zen/profile"  # macOS fallback
+            ;;
+        "Linux")
+            local xdg_data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+            echo "$xdg_data_home/zen/profile"  # Linux XDG fallback
+            ;;
+        *)
+            echo "$HOME/.zen/profile"  # Generic fallback
+            ;;
+    esac
+}
+
+# Function to set Zen Browser config values
+set_zen_config() {
+    local config_key="$1"
+    local config_value="$2"
+    local zen_profile_dir="$(get_zen_profile_dir)"
+
+    echo "  Using profile directory: $zen_profile_dir"
+
+    # Create profile directory if it doesn't exist
+    mkdir -p "$zen_profile_dir"
+
+    # Create user.js if it doesn't exist
+    if [[ ! -f "$zen_profile_dir/user.js" ]]; then
+        echo "Création du fichier user.js..."
+        cat > "$zen_profile_dir/user.js" << 'EOF'
+// Zen Browser Transparency Configuration (Based on https://www.sameerasw.com/zen)
+// Core transparency settings
+user_pref("browser.tabs.allow_transparent_browser", true);
+user_pref("zen.theme.gradient.show-custom-colors", true);
+
+// Enhanced transparency features
+user_pref("widget.transparent-windows", true);
+user_pref("zen.theme.acrylic-elements", true);
+
+// Performance optimizations for transparency
+user_pref("layers.acceleration.force-enabled", true);
+user_pref("gfx.webrender.all", true);
+EOF
+    else
+        # Check if config already exists, if not add it
+        if ! grep -q "$config_key" "$zen_profile_dir/user.js"; then
+            echo "Ajout de la configuration: $config_key = $config_value"
+            echo "user_pref(\"$config_key\", $config_value);" >> "$zen_profile_dir/user.js"
+        fi
+    fi
+}
+
+# Set required configuration values based on https://www.sameerasw.com/zen
+echo "  Configuring transparency preferences..."
+set_zen_config "browser.tabs.allow_transparent_browser" "true"
+set_zen_config "zen.theme.gradient.show-custom-colors" "true"
+set_zen_config "widget.transparent-windows" "true"
+set_zen_config "zen.theme.acrylic-elements" "true"
+
+# Performance optimizations for better transparency
+set_zen_config "layers.acceleration.force-enabled" "true"
+set_zen_config "gfx.webrender.all" "true"
+
+# Set Linux-specific config if on Linux
+if [[ "$(uname)" == "Linux" ]]; then
+    set_zen_config "zen.widget.linux.transparency" "true"
+fi
+
+echo "  Configuration de transparence appliquée à Zen Browser"
+
+# Install Transparent Zen mod (primary method from sameerasw.com)
+echo "🎨 Installing Transparent Zen mod..."
+echo "📌 The Transparent Zen mod is the main component for transparency."
+echo ""
+
+# Check if user has Zen Browser running (with timeout to prevent hanging)
+if ! is_ci_environment; then
+    if timeout 5s pgrep -f "zen" > /dev/null 2>&1; then
+        echo "   Zen Browser is currently running. Please close it before installing the mod."
+        echo "  After closing Zen Browser, the mod will be installed automatically."
+    elif [[ $? -eq 124 ]]; then
+        echo "   Process check timed out, continuing installation..."
+    fi
+fi
+
+# Install Transparent Zen mod (this would typically be done through Zen's mod manager)
+echo "  Setting up for Transparent Zen mod installation..."
+echo "  Instructions for manual installation:"
+echo "   1. Open Zen Browser"
+echo "   2. Go to Settings > Mods"
+echo "   3. Search for 'Transparent Zen'"
+echo "   4. Install the mod by clicking 'Install'"
+echo "   5. Enable 'Allow zen browser to be transparent' in mod settings"
+echo ""
+
+# Install Firefox extension (Zen Internet Addon)
+echo "📦 Installing Firefox extension (Zen Internet Addon)..."
+echo "  Instructions for Firefox extension:"
+echo "   1. The Zen Internet Addon should be available in Zen's extensions"
+echo "   2. Enable the addon and sync latest themes via addon pop-up"
+echo ""
+
+# Create userChrome.css for enhanced transparency (if needed)
+zen_profile_dir="$(get_zen_profile_dir)"
+chrome_dir="$zen_profile_dir/chrome"
+echo "🎨 Création de la configuration userChrome.css dans $chrome_dir..."
+mkdir -p "$chrome_dir"
+cat > "$chrome_dir/userChrome.css" << 'EOF'
+/* Zen Browser Transparency Enhancements */
+
+/* Remove light background behind website rendering area */
+:root:not([inDOMFullscreen="true"]):not([chromehidden~="location"]):not([chromehidden~="toolbar"]) {
+  & #tabbrowser-tabbox #tabbrowser-tabpanels .browserSidebarContainer {
+    & browser[transparent="true"] {
+      background: none !important;
+    }
+  }
+}
+
+/* Optional: Make tabs transparent */
+#tabbrowser-tabs {
+  --toolbar-bgcolor: rgba(0, 0, 0, 0.7) !important;
+  --toolbar-color: white !important;
+}
+
+/* Optional: Make toolbar transparent */
+#navigator-toolbox {
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(10px) !important;
+}
+EOF
+
+echo "  Configuration userChrome.css créée"
+
+# Final instructions based on https://www.sameerasw.com/zen
+echo ""
+echo "  Complete setup instructions for Zen Browser transparency:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  STEP 1: Install Transparent Zen mod"
+echo "   • Open Zen Browser"
+echo "   • Go to Settings > Mods"
+echo "   • Search for 'Transparent Zen'"
+echo "   • Install and enable the mod"
+echo "   • Enable 'Allow zen browser to be transparent' in mod settings"
+echo ""
+echo "  STEP 2: Install Zen Internet Addon"
+echo "   • Install the Zen Internet Addon (Firefox extension)"
+echo "   • Sync latest themes via addon pop-up"
+echo ""
+echo "  STEP 3: Configure system (if needed)"
+if [[ "$(uname)" == "Darwin" ]]; then
+    echo "   • macOS: Native transparency support available"
+    echo "   • Profile location: ~/Library/Application Support/zen/Profiles/"
+elif [[ "$(uname)" == "Linux" ]]; then
+    echo "   • Linux: May need compositor with blur support"
+    echo "   • Profile location: \${XDG_DATA_HOME:-~/.local/share}/zen/Profiles/"
+    echo "   • Alternative locations: ~/.zen/Profiles/ or ~/.config/zen/Profiles/"
+    echo "   • Wayland + KDE: Use Kwin blur"
+    echo "   • Hyprland: Built-in support (tested on v0.14.8b)"
+    echo "   • GNOME: Install Blur My Shell extension (experimental)"
+    echo "   • X11: May need compositor like Picom for blur effects"
+else
+    echo "   • Windows 11: Native mica/acrylic support"
+    echo "   • Profile location: %APPDATA%\\zen\\Profiles\\"
+    echo "   • Windows 11: Consider 'Mica for Everyone' mod for enhanced effects"
+fi
+echo ""
+echo "  STEP 4: Troubleshooting tips"
+echo "   • Disable power saving settings if transparency is choppy"
+echo "   • Adjust zen theme contrast slider for better visibility"
+echo "   • Use Darkreader for dark mode on unsupported sites"
+echo ""
+echo "  Zen Browser transparency configuration completed!"
+echo "🌐 For more details, visit: https://www.sameerasw.com/zen"

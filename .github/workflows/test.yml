@@ -1,0 +1,232 @@
+name: Test Dotfiles Installation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-configs:
+    name: Validate Configuration Files
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      
+      - name: Install validation tools
+        run: |
+          pip install toml pyyaml
+      
+      - name: Validate Starship TOML
+        run: |
+          echo "✅ Validating Starship configuration..."
+          python -c "import toml; toml.load('dot_config/starship.toml')"
+          echo "✅ Starship config is valid"
+      
+      - name: Validate YAML files
+        run: |
+          echo "✅ Validating YAML files..."
+          python -c "import yaml; yaml.safe_load(open('.github/workflows/test.yml'))"
+          echo "✅ YAML files are valid"
+
+  check-templates:
+    name: Check Chezmoi Templates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install chezmoi
+        run: |
+          CHEZMOI_VERSION=2.65.2
+          curl -fsSL "https://github.com/twpayne/chezmoi/releases/download/v${CHEZMOI_VERSION}/chezmoi_${CHEZMOI_VERSION}_linux-glibc_amd64.tar.gz" | \
+            sudo tar -xz -C /usr/local/bin
+          sudo chmod +x /usr/local/bin/chezmoi
+          chezmoi --version
+      
+      - name: Test template rendering
+        run: |
+          echo "✅ Testing template rendering..."
+          
+          # Test key templates can render in CI environment
+          export CI=true
+          export GITHUB_ACTIONS=true
+          
+          # Test main config template
+          chezmoi execute-template --init --source="${GITHUB_WORKSPACE}" < dot_chezmoi.toml.tmpl > /dev/null
+          echo "✅ dot_chezmoi.toml.tmpl renders correctly"
+          
+          # Test env template
+          chezmoi execute-template --init --source="${GITHUB_WORKSPACE}" < private_dot_env.tmpl > /dev/null
+          echo "✅ private_dot_env.tmpl renders correctly"
+          
+          # Test SSH config template
+          chezmoi execute-template --init --source="${GITHUB_WORKSPACE}" < private_dot_ssh/config.tmpl > /dev/null
+          echo "✅ SSH config template renders correctly"
+          
+          echo "✅ All key templates render successfully"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Check for secrets
+        run: |
+          echo "🔍 Scanning for potential secrets..."
+          
+          # Check for actual secret patterns (not placeholders)
+          SECRET_FOUND=0
+          
+          # Check for real email addresses (not placeholders)
+          if grep -r "@gmail\.com\|@outlook\.com\|@yahoo\.com" . \
+            --exclude-dir=.git \
+            --exclude-dir=.github \
+            --exclude="*.md" \
+            | grep -v "your\.email@example\.com\|example@gmail\.com\|test@"; then
+            echo "❌ Real email addresses found"
+            SECRET_FOUND=1
+          fi
+          
+          # Check for OpenAI/Anthropic keys
+          if grep -rE "sk-[a-zA-Z0-9]{40,}" . \
+            --exclude-dir=.git \
+            --exclude-dir=.github \
+            | grep -v "placeholder\|example\|YOUR_"; then
+            echo "❌ Potential API keys found"
+            SECRET_FOUND=1
+          fi
+          
+          # Check for GitHub tokens
+          if grep -rE "ghp_[a-zA-Z0-9]{36}" . \
+            --exclude-dir=.git \
+            --exclude-dir=.github \
+            | grep -v "placeholder\|example"; then
+            echo "❌ Potential GitHub tokens found"
+            SECRET_FOUND=1
+          fi
+          
+          if [ $SECRET_FOUND -eq 1 ]; then
+            echo "❌ Secrets detected - repository not safe for public"
+            exit 1
+          fi
+          
+          echo "✅ No secrets detected - repository is public-safe"
+      
+      - name: Verify sanitization
+        run: |
+          echo "🔍 Verifying repository has been sanitized..."
+          
+          # Verify bitwarden files are removed
+          if [ -f "bitwarden-secrets-import.csv" ]; then
+            echo "❌ Bitwarden CSV file still exists"
+            exit 1
+          fi
+          
+          # Verify no personal info in main config
+          if grep -q "sebastien\.giband@gmail\.com\|SEbGib" dot_chezmoi.toml.tmpl; then
+            echo "❌ Personal information still in dot_chezmoi.toml.tmpl"
+            exit 1
+          fi
+          
+          # Verify LICENSE exists
+          if [ ! -f "LICENSE" ]; then
+            echo "❌ LICENSE file missing"
+            exit 1
+          fi
+          
+          # Verify SECURITY.md exists
+          if [ ! -f "SECURITY.md" ]; then
+            echo "❌ SECURITY.md file missing"
+            exit 1
+          fi
+          
+          echo "✅ Repository sanitization verified"
+
+  test-installation:
+    name: Test Installation Script
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Test installation in CI mode
+        run: |
+          echo "🧪 Testing basic installation..."
+          
+          # Set CI environment
+          export CI=true
+          export GITHUB_ACTIONS=true
+          export DEBIAN_FRONTEND=noninteractive
+          
+          # Install chezmoi
+          sh -c "$(curl -fsLS get.chezmoi.io)" -- --version
+          
+          # Test that scripts can be sourced without errors
+          echo "✅ Testing script syntax..."
+          
+          # Find all shell scripts and check syntax
+          find . -name "*.sh" -type f | while read script; do
+            if [ -f "$script" ]; then
+              bash -n "$script" 2>&1 || {
+                echo "❌ Syntax error in $script"
+                exit 1
+              }
+            fi
+          done
+          
+          echo "✅ All scripts have valid syntax"
+          echo "✅ Installation test completed"
+
+  check-documentation:
+    name: Check Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Verify required documentation
+        run: |
+          echo "📚 Checking documentation..."
+          
+          REQUIRED_DOCS=(
+            "README.md"
+            "LICENSE"
+            "SECURITY.md"
+            "INSTALLED_TOOLS.md"
+          )
+          
+          for doc in "${REQUIRED_DOCS[@]}"; do
+            if [ ! -f "$doc" ]; then
+              echo "❌ Missing: $doc"
+              exit 1
+            fi
+            echo "✅ Found: $doc"
+          done
+          
+          # Check README has key sections
+          if ! grep -q "Quick Start" README.md; then
+            echo "❌ README missing 'Quick Start' section"
+            exit 1
+          fi
+          
+          if ! grep -q "Security" README.md; then
+            echo "❌ README missing 'Security' section"
+            exit 1
+          fi
+          
+          echo "✅ All required documentation present"

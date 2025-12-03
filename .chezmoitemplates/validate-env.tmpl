@@ -1,0 +1,40 @@
+{{/* Template validation for environment variables */}}
+{{/* Usage: {{ template "validate-env" (dict "var" "VARIABLE_NAME" "desc" "Description" "required" true) }} */}}
+
+{{- define "validate-env" -}}
+  {{- $var := .var -}}
+  {{- $desc := .desc | default "Environment variable" -}}
+  {{- $required := .required | default false -}}
+  {{- $value := env $var -}}
+
+  {{- if and $required (not $value) -}}
+    {{- fail (printf "❌ Required environment variable %s is not set.\n   Description: %s\n   Please set it with: export %s=<value>" $var $desc $var) -}}
+  {{- end -}}
+
+  {{- if and (not $required) (not $value) -}}
+# WARNING: Optional environment variable {{ $var }} is not set
+# Description: {{ $desc }}
+# To set it: export {{ $var }}=<value>
+  {{- end -}}
+{{- end -}}
+
+{{/* Validate common environment variables */}}
+{{- define "validate-common-env" -}}
+{{- template "validate-env" (dict "var" "EDITOR" "desc" "Default text editor" "required" false) -}}
+{{- template "validate-env" (dict "var" "SHELL" "desc" "Default shell" "required" false) -}}
+{{- template "validate-env" (dict "var" "USER" "desc" "Current username" "required" true) -}}
+{{- template "validate-env" (dict "var" "HOME" "desc" "Home directory path" "required" true) -}}
+{{- end -}}
+
+{{/* Validate development environment variables */}}
+{{- define "validate-dev-env" -}}
+{{- if lookPath "node" -}}
+  {{- template "validate-env" (dict "var" "NODE_ENV" "desc" "Node.js environment" "required" false) -}}
+{{- end -}}
+{{- if lookPath "php" -}}
+  {{- template "validate-env" (dict "var" "PHP_IDE_CONFIG" "desc" "PHP IDE configuration" "required" false) -}}
+{{- end -}}
+{{- if lookPath "docker" -}}
+  {{- template "validate-env" (dict "var" "DOCKER_HOST" "desc" "Docker daemon host" "required" false) -}}
+{{- end -}}
+{{- end -}}

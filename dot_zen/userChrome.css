@@ -1,0 +1,56 @@
+/* Zen Browser Transparency Enhancements */
+
+/* Remove light background behind website rendering area */
+:root:not([inDOMFullscreen="true"]):not([chromehidden~="location"]):not([chromehidden~="toolbar"]) {
+  & #tabbrowser-tabbox #tabbrowser-tabpanels .browserSidebarContainer {
+    & browser[transparent="true"] {
+      background: none !important;
+    }
+  }
+}
+
+/* Make tabs transparent with subtle background */
+#tabbrowser-tabs {
+  --toolbar-bgcolor: rgba(0, 0, 0, 0.7) !important;
+  --toolbar-color: white !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(10px) !important;
+  -moz-backdrop-filter: blur(10px) !important;
+}
+
+/* Make toolbar transparent with blur effect */
+#navigator-toolbox {
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(15px) !important;
+  -moz-backdrop-filter: blur(15px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Make tab bar transparent */
+#TabsToolbar {
+  background: rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(10px) !important;
+  -moz-backdrop-filter: blur(10px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Optional: Make navigation bar transparent */
+#nav-bar {
+  background: rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(10px) !important;
+  -moz-backdrop-filter: blur(10px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Ensure transparent backgrounds for sidebar containers */
+.sidebar-panel {
+  background: transparent !important;
+}
+
+/* Make bookmarks bar transparent */
+#PersonalToolbar {
+  background: rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(10px) !important;
+  -moz-backdrop-filter: blur(10px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}

@@ -1,0 +1,165 @@
+-- Options are automatically loaded before lazy.nvim startup
+-- Default options that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/options.lua
+
+local opt = vim.opt
+
+-- SSH Environment Detection
+local is_ssh = os.getenv('SSH_CLIENT') ~= nil or os.getenv('SSH_TTY') ~= nil
+local is_work_machine = {{ index . "work" | default false }}
+
+-- Tab / Indentation
+opt.tabstop = 4
+opt.shiftwidth = 4
+opt.softtabstop = 4
+opt.expandtab = true
+opt.smartindent = true
+opt.wrap = false
+
+-- Search
+opt.incsearch = true
+opt.ignorecase = true
+opt.smartcase = true
+opt.hlsearch = false
+
+-- Appearance
+opt.relativenumber = true
+opt.termguicolors = true
+opt.signcolumn = "yes"
+opt.cmdheight = 1
+opt.scrolloff = 10
+opt.completeopt = "menuone,noinsert,noselect"
+
+-- Disable conceallevel globally to fix treesitter decoration provider error
+-- But enable it for markdown files to allow render-markdown.nvim to work
+opt.conceallevel = 0
+opt.concealcursor = ""
+
+-- Force conceallevel = 0 after all plugins load to prevent treesitter yield errors
+vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
+  pattern = "*",
+  callback = function()
+    -- Only set conceallevel = 0 for non-markdown files
+    if vim.bo.filetype ~= "markdown" then
+      vim.opt_local.conceallevel = 0
+      vim.opt_local.concealcursor = ""
+    end
+  end,
+})
+
+-- Enable conceallevel for markdown files only
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "markdown" },
+  callback = function()
+    vim.opt_local.conceallevel = 2
+    vim.opt_local.concealcursor = ""
+  end,
+})
+
+-- Behaviour
+opt.hidden = true
+opt.errorbells = false
+opt.swapfile = false
+opt.backup = false
+opt.undodir = vim.fn.expand("~/.vim/undodir")
+opt.undofile = true
+opt.backspace = "indent,eol,start"
+opt.splitright = true
+opt.splitbelow = true
+opt.autochdir = false
+opt.iskeyword:append("-")
+opt.selection = "exclusive"
+opt.mouse = "a"
+opt.clipboard = "unnamedplus"
+opt.modifiable = true
+opt.encoding = "UTF-8"
+
+{{- if index . "work" }}
+-- Work machine specific optimizations
+if is_ssh then
+  -- SSH environment optimizations
+  opt.updatetime = 1000      -- Less aggressive updates for SSH
+  opt.timeoutlen = 500       -- Reduced timeout for better responsivity
+  opt.ttimeoutlen = 50       -- Faster escape sequence timeout
+
+  -- Reduce visual effects that might be slow over SSH
+  opt.lazyredraw = true      -- Don't redraw while executing macros
+  opt.ttyfast = true         -- Faster terminal connection
+
+  -- Disable some heavy features if needed
+  -- opt.cursorline = false  -- Uncomment if cursor line causes lag
+  -- opt.cursorcolumn = false -- Uncomment if cursor column causes lag
+
+  -- Better clipboard handling for SSH
+  if vim.fn.has('clipboard') == 1 then
+    opt.clipboard = "unnamedplus"
+  else
+    -- Fallback clipboard setup for SSH without system clipboard
+    vim.g.clipboard = {
+      name = 'tmux',
+      copy = {
+        ['+'] = 'tmux load-buffer -',
+        ['*'] = 'tmux load-buffer -',
+      },
+      paste = {
+        ['+'] = 'tmux save-buffer -p',
+        ['*'] = 'tmux save-buffer -p',
+      },
+      cache_enabled = 1,
+    }
+  end
+end
+
+-- Environment visual indicators (only show when SSH or work machine)
+if is_ssh or is_work_machine then
+  vim.api.nvim_create_autocmd("VimEnter", {
+    callback = function()
+      local env_type = is_ssh and "SSH Remote" or "Work"
+      vim.notify("🖥️ " .. env_type .. " Environment", vim.log.levels.INFO, {
+        title = "Neovim",
+        timeout = 2000,
+      })
+    end,
+  })
+end
+
+{{- else }}
+-- Personal machine optimizations
+opt.updatetime = 250       -- Faster updates on personal machine
+opt.timeoutlen = 300       -- Faster timeout
+
+{{- end }}
+
+-- File-specific indentation
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "php" },
+  command = "setlocal tabstop=4 shiftwidth=4 softtabstop=4",
+})
+
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "javascript", "typescript", "javascriptreact", "typescriptreact", "json", "html", "css", "scss", "yaml", "lua" },
+  command = "setlocal tabstop=2 shiftwidth=2 softtabstop=2",
+})
+
+{{- if index . "work" }}
+-- Work machine specific autocommands
+-- Auto-save session on VimLeave (not every buffer write for better performance)
+vim.api.nvim_create_autocmd("VimLeavePre", {
+  pattern = "*",
+  callback = function()
+    -- Save session when exiting Neovim for work continuity
+    if vim.fn.argc() > 0 then
+      vim.cmd("silent! mksession! ~/.config/nvim/work-session.vim")
+    end
+  end,
+})
+
+-- SSH connection monitoring
+if is_ssh then
+  vim.api.nvim_create_autocmd({"FocusLost", "VimLeave"}, {
+    callback = function()
+      -- Force write all buffers on focus loss (in case SSH connection drops)
+      vim.cmd("silent! wall")
+    end,
+  })
+end
+{{- end }}

@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.sameerasw.com)",
+      "Read(//Users/sebastiengiband/Applications/**)",
+      "Read(//Applications/**)",
+      "Read(//Users/sebastiengiband/.zen/**)",
+      "Read(//Users/sebastiengiband/Library/**)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(./run_once_11-setup-zen-transparency.sh.tmpl)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Read(//Users/sebastiengiband/Projets/dotfiles/**)",
+      "Bash(fd:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run cancel:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(find:*)",
+      "Bash(chezmoi apply:*)",
+      "Bash(echo:*)",
+      "Bash(test -t 0)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

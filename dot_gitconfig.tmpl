@@ -1,0 +1,257 @@
+# Configuration Git moderne
+{{- $name := "Your Name" }}
+{{- $email := "your.email@example.com" }}
+{{- if hasKey . "name" }}{{ $name = .name }}{{ end }}
+{{- if hasKey . "email" }}{{ $email = .email }}{{ end }}
+# User: {{ $name }} <{{ $email }}>
+
+[user]
+    name = {{ $name }}
+    email = {{ $email }}
+
+[core]
+    editor = nvim
+    pager = delta
+    autocrlf = input
+    safecrlf = true
+    excludesfile = ~/.gitignore_global
+    attributesfile = ~/.gitattributes_global
+
+[init]
+    defaultBranch = main
+
+[push]
+    default = simple
+    autoSetupRemote = true
+
+[pull]
+    rebase = true
+    ff = only
+
+[fetch]
+    prune = true
+    pruneTags = true
+
+[rebase]
+    autoStash = true
+    autoSquash = true
+
+[merge]
+    tool = nvimdiff
+    conflictstyle = diff3
+    ff = false
+
+[mergetool]
+    prompt = false
+    keepBackup = false
+
+[mergetool "nvimdiff"]
+    cmd = nvim -d $LOCAL $REMOTE $MERGED -c '$wincmd w' -c 'wincmd J'
+
+[diff]
+    tool = nvimdiff
+    colorMoved = default
+    algorithm = histogram
+
+[difftool]
+    prompt = false
+
+[difftool "nvimdiff"]
+    cmd = nvim -d $LOCAL $REMOTE
+
+# ===== DELTA CONFIGURATION =====
+[delta]
+    navigate = true
+    light = false
+    line-numbers = true
+    syntax-theme = rose-pine
+    features = rose-pine
+
+[delta "rose-pine"]
+    # Rose Pine theme for delta
+    dark = true
+    syntax-theme = rose-pine
+    file-style = "#ebbcba bold"
+    file-decoration-style = "#ebbcba ul"
+    hunk-header-style = "#9ccfd8 bold"
+    hunk-header-decoration-style = "#9ccfd8 box"
+    line-numbers-left-style = "#6e6a86"
+    line-numbers-right-style = "#6e6a86"
+    line-numbers-minus-style = "#eb6f92"
+    line-numbers-plus-style = "#31748f"
+    line-numbers-zero-style = "#6e6a86"
+    minus-style = "syntax #362031"
+    minus-emph-style = "syntax #5b2c3f"
+    plus-style = "syntax #232e32"
+    plus-emph-style = "syntax #2d4f3e"
+    zero-style = "syntax"
+    blame-code-style = "syntax"
+    blame-format = "{author:<18} ({commit:>7}) {timestamp:^12} "
+    blame-palette = "#191724 #1f1d2e #26233a #6e6a86"
+
+[interactive]
+    diffFilter = delta --color-only
+
+# ===== ALIASES AVANCÉS =====
+[alias]
+    # Status et informations
+    s = status --short --branch
+    st = status
+    info = remote show origin
+    
+    # Logs et historique
+    l = log --oneline --graph --decorate --all -20
+    ll = log --oneline --graph --decorate --all
+    lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+    lp = log --pretty=format:'%C(yellow)%h%C(reset) - %an [%C(green)%ar%C(reset)] %s'
+    last = log -1 HEAD --stat
+    
+    # Branches
+    b = branch
+    ba = branch -a
+    bd = branch -d
+    bD = branch -D
+    co = checkout
+    cob = checkout -b
+    com = checkout main
+    cod = checkout develop
+    
+    # Commits
+    c = commit
+    cm = commit -m
+    ca = commit --amend
+    can = commit --amend --no-edit
+    cane = commit --amend --no-edit
+    
+    # Add et staging
+    a = add
+    aa = add --all
+    ap = add --patch
+    au = add --update
+    
+    # Diff
+    d = diff
+    ds = diff --staged
+    dc = diff --cached
+    dh = diff HEAD
+    
+    # Push et pull
+    p = push
+    pf = push --force-with-lease
+    pu = push -u origin HEAD
+    pl = pull
+    pr = pull --rebase
+    
+    # Fetch
+    f = fetch
+    fa = fetch --all --prune
+    
+    # Merge et rebase
+    m = merge
+    mn = merge --no-ff
+    rb = rebase
+    rbi = rebase -i
+    rbc = rebase --continue
+    rba = rebase --abort
+    
+    # Stash
+    st = stash
+    stp = stash pop
+    stl = stash list
+    sts = stash show
+    std = stash drop
+    
+    # Reset
+    r = reset
+    rh = reset --hard
+    rs = reset --soft
+    
+    # Remote
+    rv = remote -v
+    ra = remote add
+    rr = remote remove
+    
+    # Tags
+    t = tag
+    ta = tag -a
+    td = tag -d
+    
+    # Utilitaires
+    aliases = config --get-regexp alias
+    ignore = "!gi() { curl -sL https://www.toptal.com/developers/gitignore/api/$@ ;}; gi"
+    
+    # Nettoyage
+    clean-branches = "!git branch --merged | grep -v '\\*\\|main\\|master\\|develop' | xargs -n 1 git branch -d"
+    clean-remote = "!git remote prune origin && git branch -r --merged | grep -v '\\*\\|main\\|master\\|develop' | sed 's/origin\\///' | xargs -n 1 git push --delete origin"
+    
+    # Workflows
+    sync = "!git fetch --all --prune && git pull --rebase && git push"
+    save = "!git add -A && git commit -m 'SAVEPOINT'"
+    wip = "!git add -A && git commit -m 'WIP: work in progress'"
+    undo = reset HEAD~1 --mixed
+    amend = commit -a --amend
+    
+    # Recherche
+    grep = grep -Ii
+    find = "!git ls-files | grep -i"
+    
+    # Statistiques
+    stats = shortlog -sn
+    contributors = shortlog -sn --all --no-merges
+    
+    # Maintenance
+    optimize = "!git repack -Ad && git prune && git gc --aggressive"
+
+# ===== PLATFORM SPECIFIC EMAIL CONFIGURATION =====
+# GitHub repositories - use personal email
+[includeIf "hasconfig:remote.*.url:*github.com*/**"]
+    path = ~/.gitconfig-github
+
+# GitLab repositories - use work email
+[includeIf "hasconfig:remote.*.url:*gitlab.com*/**"]
+    path = ~/.gitconfig-gitlab
+
+# ===== GITHUB CLI =====
+[credential "https://github.com"]
+    helper =
+    helper = cache --timeout=3600
+
+[credential "https://gitlab.com"]
+    helper =
+    helper = cache --timeout=3600
+
+# ===== HOOKS ET SÉCURITÉ =====
+[transfer]
+    fsckobjects = true
+
+[fetch]
+    fsckobjects = true
+
+[receive]
+    fsckObjects = true
+
+# ===== URL SHORTCUTS =====
+[url "git@github.com:"]
+    insteadOf = gh:
+    insteadOf = github:
+
+[url "git@gitlab.com:"]
+    insteadOf = gl:
+    insteadOf = gitlab:
+
+[url "git@bitbucket.org:"]
+    insteadOf = bb:
+    insteadOf = bitbucket:
+
+# ===== CONFIGURATION LOCALE =====
+# Inclusion de la configuration locale si elle existe
+[include]
+    path = ~/.gitconfig.local
+
+# ===== MAINTENANCE AUTOMATIQUE =====
+[maintenance]
+    repo = true
+    auto = false
+
+[gc]
+    auto = 256

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Setup Obsidian vault by cloning from GitHub
+
+set -euo pipefail
+
+VAULT_PATH="$HOME/Obsidian/Dev"
+{{- $github_user := "your-github-username" }}
+{{- if hasKey . "github_username" }}{{ $github_user = .github_username }}{{ end }}
+GITHUB_REPO="git@github.com:{{ $github_user }}/obsidian-vault.git"
+
+echo "🗂️  Setting up Obsidian vault..."
+
+# Check if vault already exists
+if [[ -d "$VAULT_PATH/.git" ]]; then
+    echo "ℹ️  Vault already exists at $VAULT_PATH (git repository detected)"
+    echo "   Pulling latest changes..."
+    cd "$VAULT_PATH"
+    git pull origin main || echo "⚠️  Could not pull latest changes (maybe no connection?)"
+else
+    # Clone vault from GitHub
+    echo "📥 Cloning Obsidian vault from GitHub..."
+    if git clone "$GITHUB_REPO" "$VAULT_PATH"; then
+        echo "✅ Vault cloned successfully from GitHub"
+    else
+        echo "❌ Failed to clone from GitHub (SSH key configured?)"
+        echo "   Falling back to manual structure creation..."
+        mkdir -p "$VAULT_PATH"/{01-Projects,02-Areas,03-Resources}
+        mkdir -p "$VAULT_PATH/.obsidian"
+        cp "$HOME/.config/obsidian/recommended-plugins.json" "$VAULT_PATH/.obsidian/" 2>/dev/null || true
+    fi
+fi
+
+# Ensure Memory-Bank directory exists
+if [[ ! -d "$VAULT_PATH/Memory-Bank" ]]; then
+    echo "📁 Creating Memory-Bank directory..."
+    mkdir -p "$VAULT_PATH/Memory-Bank"
+    touch "$VAULT_PATH/Memory-Bank/.gitkeep"
+fi
+
+echo "✅ Obsidian vault ready at $VAULT_PATH"
+
+# Install plugins if Obsidian is installed and script is available
+if command -v install-obsidian-plugins &> /dev/null; then
+    echo "📦 Installing Obsidian plugins..."
+    install-obsidian-plugins "$VAULT_PATH" || echo "⚠️  Plugin installation failed (you can run it manually later)"
+else
+    echo "ℹ️  install-obsidian-plugins not found, skipping plugin installation"
+    echo "   Run 'install-obsidian-plugins ~/Obsidian' manually after Obsidian is installed"
+fi
+
+echo "✅ Obsidian setup complete!"
+echo ""
+echo "📝 Next steps:"
+echo "1. Install Obsidian if not already: https://obsidian.md/download"
+echo "2. Open vault at: $VAULT_PATH"
+echo "3. Restart Obsidian to load plugins"
+echo "4. Configure plugin settings in Obsidian Settings"
+echo "5. Memory exports will go to: $VAULT_PATH/Memory-Bank/"

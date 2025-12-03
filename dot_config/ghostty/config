@@ -1,0 +1,121 @@
+# Ghostty Terminal Configuration
+# Optimized for tmux + starship workflow
+
+# ===== APPEARANCE =====
+# Font configuration - using Nerd Font for icon support
+font-family = "JetBrainsMono Nerd Font Mono"
+font-size = 13
+font-thicken = true
+
+# Theme and colors - Rose Pine coordinated with tmux/starship
+# Using Rose Pine base colors
+background = #191724
+foreground = #e0def4
+
+# Rose Pine color palette
+# Normal colors
+palette = 0=#26233a
+palette = 1=#eb6f92
+palette = 2=#31748f
+palette = 3=#f6c177
+palette = 4=#9ccfd8
+palette = 5=#c4a7e7
+palette = 6=#ebbcba
+palette = 7=#e0def4
+
+# Bright colors
+palette = 8=#6e6a86
+palette = 9=#eb6f92
+palette = 10=#31748f
+palette = 11=#f6c177
+palette = 12=#9ccfd8
+palette = 13=#c4a7e7
+palette = 14=#ebbcba
+palette = 15=#e0def4
+
+background-opacity = 0.85
+background-blur-radius = 20
+
+# Window appearance
+window-decoration = true
+window-title-font-family = "JetBrainsMono Nerd Font Mono"
+window-padding-x = 10
+window-padding-y = 10
+window-padding-balance = false
+
+# ===== BEHAVIOR =====
+# Shell integration - let tmux handle session management
+shell-integration = detect
+shell-integration-features = cursor,sudo,title
+
+# Scrollback - moderate since tmux handles history
+scrollback-limit = 10000
+
+# Mouse support - essential for tmux
+mouse-hide-while-typing = true
+copy-on-select = false
+
+# ===== PERFORMANCE =====
+# Optimized for development workflow
+confirm-close-surface = false
+quit-after-last-window-closed = true
+auto-update = check
+
+# ===== KEYBINDINGS =====
+# Minimal keybinds - let tmux handle most shortcuts
+# Only essential terminal functions
+
+# Copy/Paste (standard)
+keybind = cmd+c=copy_to_clipboard
+keybind = cmd+v=paste_from_clipboard
+
+# Multiline input - Shift+Enter for newline without executing
+keybind = shift+enter=text:\x0a
+
+# Font size adjustment
+keybind = cmd+plus=increase_font_size:1
+keybind = cmd+minus=decrease_font_size:1
+keybind = cmd+zero=reset_font_size
+
+# New window/tab - delegate to tmux for session management
+keybind = cmd+t=new_tab
+keybind = cmd+w=close_surface
+
+
+# AZERTY French keyboard specific - map common tmux navigation
+# Alt+h/j/k/l should work, but provide alternatives for AZERTY layout
+keybind = alt+left=text:\x1bh   # Alt+h equivalent  
+keybind = alt+down=text:\x1bj   # Alt+j equivalent
+keybind = alt+up=text:\x1bk     # Alt+k equivalent
+keybind = alt+right=text:\x1bl  # Alt+l equivalent
+
+# ===== TMUX INTEGRATION =====
+# Cursor shape support for vim/nvim in tmux
+cursor-style = block
+cursor-style-blink = false
+cursor-invert-fg-bg = true
+
+# True color support for tmux and nvim - using default ghostty terminfo
+# term = xterm-256color
+
+# ===== ADVANCED =====
+# Working directory behavior
+working-directory = inherit
+
+# Link handling
+link-url = true
+
+# Bell configuration - minimal since tmux handles notifications
+desktop-notifications = false
+
+macos-titlebar-style = hidden
+
+# ===== DEVELOPMENT =====
+# Quick terminal toggle for development
+quick-terminal-position = top
+quick-terminal-screen = main
+quick-terminal-animation-duration = 200
+
+#Shaders
+# custom-shader = shaders/bettercrt.glsl
+# custom-shader = shaders/retro-terminal.glsl

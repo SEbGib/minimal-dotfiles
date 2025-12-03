@@ -1,0 +1,303 @@
+#!/usr/bin/env bash
+# Install n8n workflow automation locally with Docker
+
+set -euo pipefail
+
+# Skip in CI/test environments
+if [ "${CI:-false}" = "true" ] || [ "${GITHUB_ACTIONS:-false}" = "true" ] || [ "${CONTINUOUS_INTEGRATION:-false}" = "true" ]; then
+    echo "⏭️  Skipping n8n installation in CI environment"
+    exit 0
+fi
+
+echo "🔧 Installing n8n workflow automation..."
+
+# Check prerequisites
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker not found. Please install Docker first."
+    exit 1
+fi
+
+if ! docker compose version &> /dev/null; then
+    echo "❌ docker compose not available. Please install docker compose first."
+    exit 1
+fi
+
+# Check if Docker daemon is running
+echo "🔍 Checking if Docker daemon is running..."
+if ! docker info &> /dev/null; then
+    echo "❌ Docker daemon is not running."
+    echo ""
+    echo "Please start Docker/OrbStack first:"
+    echo "  - If using OrbStack: Open OrbStack application"
+    echo "  - If using Docker Desktop: Open Docker Desktop application"
+    echo "  - On Linux: sudo systemctl start docker"
+    echo ""
+    echo "Once Docker is running, run 'chezmoi apply --force' again."
+    exit 1
+fi
+
+# Wait for Docker to be fully ready
+echo "⏳ Waiting for Docker to be ready..."
+for i in {1..30}; do
+    if docker ps &> /dev/null; then
+        echo "✅ Docker is ready!"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "❌ Docker daemon is not responding after 30 seconds."
+        echo "Please check Docker/OrbStack status and try again."
+        exit 1
+    fi
+    echo "⏳ Attempt $i/30 - waiting for Docker daemon..."
+    sleep 1
+done
+
+# Create n8n directory
+N8N_DIR="${HOME}/.n8n"
+mkdir -p "$N8N_DIR"
+cd "$N8N_DIR"
+
+# Create docker-compose.yml
+echo "📝 Creating docker-compose.yml for n8n..."
+
+cat > docker-compose.yml <<'EOF'
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Timezone
+      - TZ=Europe/Paris
+
+      # Basic configuration
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-changeme}
+
+      # Generic OAuth2 API
+      - N8N_GENERIC_OAUTH2_API_ACTIVE=true
+
+      # Webhooks
+      - WEBHOOK_URL=http://localhost:5678/
+
+      # Editor
+      - N8N_EDITOR_BASE_URL=http://localhost:5678
+
+      # Execution
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+
+      # Logging
+      - N8N_LOG_LEVEL=info
+      - N8N_LOG_OUTPUT=console,file
+
+      # Security
+      - N8N_SECURE_COOKIE=false
+
+    volumes:
+      # Persist workflow data and configurations
+      - n8n_data:/home/node/.n8n
+
+      # Custom nodes (optional)
+      - ./custom-nodes:/home/node/.n8n/custom
+
+      # Local files access (optional)
+      - ./files:/files
+
+      # Obsidian vault access for workflow integration
+      - ${HOME}/Obsidian:/obsidian:rw
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  n8n_data:
+    driver: local
+
+networks:
+  default:
+    name: n8n_network
+EOF
+
+# Create .env file with secure credentials
+if [[ ! -f .env ]]; then
+    echo "🔑 Generating secure credentials..."
+    
+    # Generate a random password (16 characters, alphanumeric)
+    N8N_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
+    
+    cat > .env <<EOF
+# n8n Authentication
+# Generated on $(date)
+N8N_BASIC_AUTH_USER=admin
+N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+
+# Password was auto-generated for security
+# To change it, edit this file and restart n8n: n8n-restart
+EOF
+    chmod 600 .env  # Restrict permissions to owner only
+    
+    echo "✅ Secure credentials generated in ~/.n8n/.env"
+    echo "   Username: admin"
+    echo "   Password: ${N8N_PASSWORD}"
+    echo ""
+    echo "   ⚠️  Save this password! It won't be shown again."
+    echo "   ⚠️  File permissions set to 600 (owner-only read/write)"
+else
+    echo "ℹ️  Existing .env file found, keeping current credentials"
+fi
+
+# Create directories for custom nodes and files
+mkdir -p custom-nodes files
+
+# Create a README
+cat > README.md <<'EOF'
+# n8n Local Installation
+
+## Quick Start
+
+### Start n8n
+```bash
+n8n-start
+# or
+cd ~/.n8n && docker compose up -d
+```
+
+### Stop n8n
+```bash
+n8n-stop
+# or
+cd ~/.n8n && docker compose down
+```
+
+### View logs
+```bash
+n8n-logs
+# or
+cd ~/.n8n && docker compose logs -f
+```
+
+### Restart n8n
+```bash
+n8n-restart
+# or
+cd ~/.n8n && docker compose restart
+```
+
+## Access
+
+- **URL**: http://localhost:5678
+- **Username**: admin (default)
+- **Password**: changeme (default - CHANGE THIS!)
+
+Edit `~/.n8n/.env` to change credentials.
+
+## Data Persistence
+
+All workflow data is persisted in Docker volumes:
+- Workflows and credentials
+- Execution history
+- Custom nodes
+
+## Custom Nodes
+
+Place custom nodes in `~/.n8n/custom-nodes/` and restart n8n.
+
+## File Access
+
+Files in `~/.n8n/files/` are accessible to workflows via `/files/` path.
+
+## Troubleshooting
+
+**Container won't start:**
+- Check Docker is running: `docker ps`
+- Check logs: `docker compose logs n8n`
+
+**Can't access UI:**
+- Verify port 5678 is not in use: `lsof -i :5678`
+- Check container status: `docker compose ps`
+
+**Workflows not persisting:**
+- Check volume mounts: `docker volume ls | grep n8n`
+- Verify permissions: `docker compose exec n8n ls -la /home/node/.n8n`
+
+## Backup
+
+Backup your workflows:
+```bash
+# Backup docker volume
+docker run --rm -v n8n_n8n_data:/data -v $(pwd):/backup alpine tar czf /backup/n8n-backup-$(date +%Y%m%d).tar.gz -C /data .
+
+# Or export from UI: Settings > Import/Export
+```
+
+## Documentation
+
+- Official docs: https://docs.n8n.io
+- Community: https://community.n8n.io
+- Templates: https://n8n.io/workflows
+EOF
+
+# Final pre-flight check
+echo "✅ Final pre-flight checks..."
+if ! docker info &> /dev/null; then
+    echo "❌ Docker daemon stopped responding. Please restart Docker and try again."
+    exit 1
+fi
+
+# Pull n8n image
+echo "📥 Pulling n8n Docker image..."
+docker pull n8nio/n8n:latest
+
+# Start n8n
+echo "🚀 Starting n8n..."
+docker compose up -d
+
+# Wait for n8n to be ready
+echo "⏳ Waiting for n8n to be ready..."
+for i in {1..60}; do
+    if curl -fsS "http://localhost:5678/healthz" >/dev/null 2>&1; then
+        echo "✅ n8n is ready!"
+        break
+    fi
+    if [ $i -eq 60 ]; then
+        echo "⚠️  n8n took longer than expected to start."
+        echo "Check logs with: docker compose logs n8n"
+    fi
+    sleep 2
+done
+
+echo ""
+echo "✅ n8n workflow automation installed!"
+echo ""
+echo "📋 Quick commands:"
+echo "  n8n-start    - Start n8n"
+echo "  n8n-stop     - Stop n8n"
+echo "  n8n-restart  - Restart n8n"
+echo "  n8n-logs     - View logs"
+echo "  n8n-status   - Check status"
+echo ""
+echo "🌐 Access n8n:"
+echo "  URL: http://localhost:5678"
+echo "  User: admin"
+echo "  Pass: changeme (CHANGE THIS in ~/.n8n/.env!)"
+echo ""
+echo "📁 Configuration:"
+echo "  Directory: ~/.n8n/"
+echo "  Credentials: ~/.n8n/.env"
+echo "  Custom nodes: ~/.n8n/custom-nodes/"
+echo "  Files: ~/.n8n/files/"
+echo ""
+echo "⚠️  IMPORTANT: Change the default password in ~/.n8n/.env before using!"
+echo ""

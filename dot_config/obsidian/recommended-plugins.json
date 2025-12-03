@@ -1,0 +1,54 @@
+{
+  "description": "Plugins recommandés pour documentation technique via obsidian-technical-doc-manager",
+  "plugins": [
+    {
+      "id": "dataview",
+      "name": "Dataview",
+      "repo": "blacksmithgu/obsidian-dataview",
+      "priority": "essential",
+      "description": "Query and aggregate metadata from notes"
+    },
+    {
+      "id": "templater-obsidian",
+      "name": "Templater",
+      "repo": "SilentVoid13/Templater",
+      "priority": "essential",
+      "description": "Advanced template system with variables"
+    },
+    {
+      "id": "obsidian-git",
+      "name": "Obsidian Git",
+      "repo": "denolehov/obsidian-git",
+      "priority": "essential",
+      "description": "Version control and auto-commit documentation"
+    },
+    {
+      "id": "obsidian-local-rest-api",
+      "name": "Local REST API",
+      "repo": "coddingtonbear/obsidian-local-rest-api",
+      "priority": "recommended",
+      "description": "REST API for external automation"
+    },
+    {
+      "id": "tag-wrangler",
+      "name": "Tag Wrangler",
+      "repo": "pjeby/tag-wrangler",
+      "priority": "optional",
+      "description": "Manage tag hierarchies"
+    },
+    {
+      "id": "breadcrumbs",
+      "name": "Breadcrumbs",
+      "repo": "SkepticMystic/breadcrumbs",
+      "priority": "optional",
+      "description": "Visualize note relationships"
+    },
+    {
+      "id": "obsidian-excalidraw-plugin",
+      "name": "Excalidraw",
+      "repo": "zsviczian/obsidian-excalidraw-plugin",
+      "priority": "optional",
+      "description": "Hand-drawn diagrams"
+    }
+  ]
+}

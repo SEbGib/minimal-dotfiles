@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+
+set -eufo pipefail
+
+# Environment detection function for CI/Docker environments
+is_ci_environment() {
+    [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]] ||
+    [[ -n "${DOCKER_CONTAINER:-}" ]] || [[ -f /.dockerenv ]] ||
+    [[ "$(whoami)" == "root" ]] || ! [[ -t 0 ]] ||
+    [[ -n "${DEBIAN_FRONTEND:-}" ]] || [[ "${USER:-}" == "testuser" ]]
+}
+
+echo "🐚 Configuration des plugins Zsh modernes..."
+
+# Skip in CI environments to prevent hanging on git operations
+if is_ci_environment; then
+    echo "  Skipping Zsh plugins setup in automated environment (non-critical)"
+    echo "  To configure Zsh plugins later, run this script manually after setup"
+    exit 0
+fi
+
+# Vérification que Zsh est installé
+if ! command -v zsh &> /dev/null; then
+    echo "  Zsh non installé. Exécutez d'abord le script d'installation des outils."
+    exit 1
+fi
+
+# Installation Oh My Zsh si absent
+ZSH_DIR="$HOME/.oh-my-zsh"
+if [[ ! -d "$ZSH_DIR" ]]; then
+    echo "📦 Installation Oh My Zsh..."
+    timeout 300s sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    echo "  Oh My Zsh installé"
+fi
+
+# Définition du répertoire des plugins personnalisés
+ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+PLUGINS_DIR="$ZSH_CUSTOM/plugins"
+
+# Création du répertoire des plugins si nécessaire
+mkdir -p "$PLUGINS_DIR"
+
+echo "📦 Installation des plugins Zsh essentiels..."
+
+# Plugin zsh-autosuggestions (suggestions basées sur l'historique)
+if [[ ! -d "$PLUGINS_DIR/zsh-autosuggestions" ]]; then
+    echo "  • zsh-autosuggestions..."
+    git clone https://github.com/zsh-users/zsh-autosuggestions "$PLUGINS_DIR/zsh-autosuggestions"
+else
+    echo "  ✓ zsh-autosuggestions déjà installé"
+fi
+
+# Plugin fast-syntax-highlighting (coloration syntaxique rapide)
+if [[ ! -d "$PLUGINS_DIR/fast-syntax-highlighting" ]]; then
+    echo "  • fast-syntax-highlighting..."
+    git clone https://github.com/zdharma-continuum/fast-syntax-highlighting "$PLUGINS_DIR/fast-syntax-highlighting"
+else
+    echo "  ✓ fast-syntax-highlighting déjà installé"
+fi
+
+# Plugin zsh-completions (complétion avancée)
+if [[ ! -d "$PLUGINS_DIR/zsh-completions" ]]; then
+    echo "  • zsh-completions..."
+    git clone https://github.com/zsh-users/zsh-completions "$PLUGINS_DIR/zsh-completions"
+else
+    echo "  ✓ zsh-completions déjà installé"
+fi
+
+# Plugin zsh-history-substring-search (recherche dans l'historique)
+if [[ ! -d "$PLUGINS_DIR/zsh-history-substring-search" ]]; then
+    echo "  • zsh-history-substring-search..."
+    git clone https://github.com/zsh-users/zsh-history-substring-search "$PLUGINS_DIR/zsh-history-substring-search"
+else
+    echo "  ✓ zsh-history-substring-search déjà installé"
+fi
+
+# Note: zsh-z plugin removed - using zoxide instead for better performance
+
+# Plugin zsh-bat (intégration bat pour cat)
+if [[ ! -d "$PLUGINS_DIR/zsh-bat" ]] && command -v bat &> /dev/null; then
+    echo "  • zsh-bat..."
+    git clone https://github.com/fdellwing/zsh-bat "$PLUGINS_DIR/zsh-bat"
+else
+    echo "  ✓ zsh-bat déjà installé ou bat non disponible"
+fi
+
+# Configuration des thèmes pour fast-syntax-highlighting
+echo "🎨 Configuration des thèmes de coloration..."
+FSH_THEMES_DIR="$PLUGINS_DIR/fast-syntax-highlighting/themes"
+if [[ -d "$FSH_THEMES_DIR" ]]; then
+    # Créer un thème Rose Pine personnalisé
+    cat > "$FSH_THEMES_DIR/rose-pine.ini" << 'EOF'
+; Thème Rose Pine pour fast-syntax-highlighting
+; Coordonné avec la configuration Starship et Neovim
+
+[base]
+default          = fg=#e0def4
+unknown-token    = fg=#eb6f92,bold
+commandseparator = fg=#9ccfd8
+redirection      = fg=#f6c177
+here-string-tri  = fg=#f6c177
+here-string-text = fg=#31748f
+here-string-var  = fg=#9ccfd8,bold
+exec-descriptor  = fg=#f6c177,bold
+comment          = fg=#6e6a86,italic
+correct-subtle   = fg=#26233a,bg=#eb6f92
+incorrect-subtle = fg=#eb6f92,bg=#26233a
+subtle-separator = fg=#403d52
+subtle-bg        = bg=#26233a
+
+[command-point]
+reserved-word     = fg=#c4a7e7,bold
+alias             = fg=#31748f,bold
+suffix-alias      = fg=#31748f,bold
+global-alias      = fg=#f6c177,bold
+builtin           = fg=#9ccfd8,bold
+function          = fg=#ebbcba,bold
+command           = fg=#9ccfd8,bold
+precommand        = fg=#c4a7e7,italic
+commandseparator  = fg=#eb6f92
+hashed-command    = fg=#9ccfd8
+single-sq-bracket = fg=#f6c177
+double-sq-bracket = fg=#f6c177
+double-paren      = fg=#f6c177
+
+[paths]
+path              = fg=#9ccfd8,underline
+pathseparator     = fg=#eb6f92
+path-to-dir       = fg=#9ccfd8,underline,bold
+globbing          = fg=#f6c177,bold
+globbing-ext      = fg=#eb6f92,bold
+
+[brackets]
+paired-bracket    = fg=#f6c177,bold
+bracket-level-1   = fg=#9ccfd8,bold
+bracket-level-2   = fg=#31748f,bold
+bracket-level-3   = fg=#eb6f92,bold
+
+[arguments]
+single-hyphen-option   = fg=#f6c177
+double-hyphen-option   = fg=#f6c177,bold
+back-quoted-argument   = fg=#c4a7e7
+single-quoted-argument = fg=#31748f
+double-quoted-argument = fg=#31748f
+dollar-quoted-argument = fg=#31748f
+
+[in-string]
+back-dollar-quoted-argument      = fg=#9ccfd8
+back-quoted-argument-unclosed    = fg=#eb6f92
+single-quoted-argument-unclosed  = fg=#eb6f92
+double-quoted-argument-unclosed  = fg=#eb6f92
+dollar-quoted-argument-unclosed  = fg=#eb6f92
+
+[variables]
+assign                    = fg=#e0def4
+assign-array-bracket      = fg=#f6c177
+history-expansion         = fg=#c4a7e7,bold
+EOF
+
+    echo "  Thème Rose Pine créé pour fast-syntax-highlighting"
+fi
+
+# Mise à jour des plugins existants
+echo "  Mise à jour des plugins existants..."
+for plugin in zsh-autosuggestions fast-syntax-highlighting zsh-completions zsh-history-substring-search zsh-bat; do
+    plugin_dir="$PLUGINS_DIR/$plugin"
+    if [[ -d "$plugin_dir" ]]; then
+        echo "  • Mise à jour $plugin..."
+        (cd "$plugin_dir" && git pull --quiet)
+    fi
+done
+
+# Configuration des keybindings pour zsh-history-substring-search
+echo "⌨️ Configuration des raccourcis clavier..."
+ZSHRC_FILE="$HOME/.zshrc"
+
+# Vérifier si les keybindings sont déjà configurés
+if [[ -f "$ZSHRC_FILE" ]] && ! grep -q "history-substring-search-up" "$ZSHRC_FILE"; then
+    cat >> "$ZSHRC_FILE" << 'EOF'
+
+# ===== KEYBINDINGS POUR PLUGINS =====
+# zsh-history-substring-search
+bindkey '^[[A' history-substring-search-up      # Flèche haut
+bindkey '^[[B' history-substring-search-down    # Flèche bas
+bindkey '^P' history-substring-search-up        # Ctrl+P
+bindkey '^N' history-substring-search-down      # Ctrl+N
+
+# Navigation améliorée
+bindkey '^[[1;5C' forward-word                  # Ctrl+Right
+bindkey '^[[1;5D' backward-word                 # Ctrl+Left
+bindkey '^[[H' beginning-of-line                # Home
+bindkey '^[[F' end-of-line                      # End
+bindkey '^[[3~' delete-char                     # Delete
+
+# Autosuggestions
+bindkey '^ ' autosuggest-accept                 # Ctrl+Space pour accepter suggestion
+bindkey '^I' complete-word                      # Tab pour complétion
+
+# Édition rapide
+bindkey '^X^E' edit-command-line                # Ctrl+X Ctrl+E pour éditer dans $EDITOR
+EOF
+    echo "  Keybindings configurés dans .zshrc"
+fi
+
+# Validation de l'installation
+echo ""
+echo "  Validation de l'installation..."
+validation_passed=true
+
+required_plugins=(
+    "zsh-autosuggestions"
+    "fast-syntax-highlighting"
+    "zsh-completions"
+    "zsh-history-substring-search"
+)
+
+for plugin in "${required_plugins[@]}"; do
+    if [[ -d "$PLUGINS_DIR/$plugin" ]]; then
+        echo "    $plugin"
+    else
+        echo "    $plugin"
+        validation_passed=false
+    fi
+done
+
+# Vérification que Starship est installé
+if command -v starship &> /dev/null; then
+    echo "    starship"
+else
+    echo "    starship (requis pour le prompt)"
+    validation_passed=false
+fi
+
+if [[ "$validation_passed" == true ]]; then
+    echo ""
+    echo "🎉 Configuration Zsh terminée avec succès!"
+    echo ""
+    echo "  Plugins installés :"
+    echo "   • zsh-autosuggestions : Suggestions intelligentes basées sur l'historique"
+    echo "   • fast-syntax-highlighting : Coloration syntaxique en temps réel"
+    echo "   • zsh-completions : Complétion avancée pour de nombreux outils"
+    echo "   • zsh-history-substring-search : Recherche dans l'historique avec ↑/↓"
+    echo "   • zoxide : Navigation rapide moderne (remplace zsh-z)"
+    echo ""
+    echo "🎨 Thème Rose Pine configuré pour coordination avec Neovim et tmux"
+    echo ""
+    echo "⌨️ Raccourcis clavier configurés :"
+    echo "   • ↑/↓ ou Ctrl+P/N : Recherche dans l'historique"
+    echo "   • Ctrl+Space : Accepter suggestion"
+    echo "   • Ctrl+← / → : Navigation par mots"
+    echo "   • Ctrl+X Ctrl+E : Éditer commande dans \$EDITOR"
+    echo ""
+    echo "  Redémarrez votre terminal ou exécutez 'exec zsh' pour activer les changements."
+else
+    echo ""
+    echo "  Certains plugins n'ont pas pu être installés. Vérifiez votre connexion internet."
+    echo "  Vous pouvez ré-exécuter ce script plus tard."
+    exit 1
+fi

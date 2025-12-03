@@ -1,0 +1,325 @@
+#!/usr/bin/env bash
+# Nerd Font Installation - JetBrainsMono Nerd Font
+# Provides complete nerd font glyph support for Starship and terminal UI
+
+set -euo pipefail
+
+# ===== CONFIGURATION =====
+FONT_NAME="JetBrainsMono"
+FONT_VERSION="v3.3.0"  # Latest stable version as of 2024
+FONT_DIR="$HOME/.local/share/fonts"
+NERD_FONTS_DIR="$FONT_DIR/NerdFonts"
+TEMP_DIR=$(mktemp -d)
+DOWNLOAD_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/${FONT_VERSION}/${FONT_NAME}.zip"
+
+# ===== PLATFORM DETECTION =====
+OS_TYPE="unknown"
+if [[ "$(uname)" == "Darwin" ]]; then
+    OS_TYPE="macos"
+    FONT_DIR="$HOME/Library/Fonts"
+    NERD_FONTS_DIR="$FONT_DIR/NerdFonts"
+elif [[ "$(uname)" == "Linux" ]]; then
+    OS_TYPE="linux"
+fi
+
+# ===== UTILITY FUNCTIONS =====
+log_info() {
+    echo "INFO: $*" >&2
+}
+
+log_success() {
+    echo "SUCCESS: $*" >&2
+}
+
+log_error() {
+    echo "ERROR: $*" >&2
+}
+
+cleanup() {
+    if [[ -d "$TEMP_DIR" ]]; then
+        rm -rf "$TEMP_DIR"
+        log_info "Cleaned up temporary directory"
+    fi
+}
+
+trap cleanup EXIT
+
+check_already_installed() {
+    # Check if JetBrainsMono Nerd Font is already installed
+    if fc-list | grep -i "JetBrainsMono" | grep -i "Nerd" >/dev/null 2>&1; then
+        log_success "JetBrainsMono Nerd Font is already installed"
+        return 0
+    fi
+    return 1
+}
+
+download_font() {
+    log_info "Downloading ${FONT_NAME} Nerd Font ${FONT_VERSION}..."
+
+    local output_file="$TEMP_DIR/${FONT_NAME}.zip"
+    local max_retries=3
+    local retry=0
+
+    while [[ $retry -lt $max_retries ]]; do
+        if curl -fsSL --connect-timeout 30 --max-time 300 "$DOWNLOAD_URL" -o "$output_file"; then
+            # Verify file is not empty and is a valid zip
+            if [[ -s "$output_file" ]] && file "$output_file" | grep -q "Zip archive"; then
+                log_success "Downloaded ${FONT_NAME}.zip"
+                echo "$output_file"
+                return 0
+            else
+                log_error "Invalid or empty file detected"
+            fi
+        fi
+
+        retry=$((retry + 1))
+        if [[ $retry -lt $max_retries ]]; then
+            log_info "Retrying in 5 seconds... (attempt $((retry + 1))/$max_retries)"
+            sleep 5
+        fi
+    done
+
+    log_error "Failed to download font after $max_retries attempts"
+    return 1
+}
+
+extract_font() {
+    local zip_file="$1"
+    local extract_dir="$TEMP_DIR/extracted"
+
+    log_info "Extracting font files..."
+
+    # Create extraction directory
+    mkdir -p "$extract_dir"
+
+    # Extract with explicit error handling
+    unzip -q "$zip_file" -d "$extract_dir" 2>/dev/null
+    local extract_status=$?
+
+    # Check if extraction was successful by verifying files exist
+    if [[ $extract_status -ne 0 ]] || [[ -z "$(find "$extract_dir" -name '*.ttf' -o -name '*.otf')" ]]; then
+        log_error "Failed to extract font archive"
+        return 1
+    fi
+
+    log_success "Extracted font files"
+    return 0
+}
+
+install_font() {
+    local extract_dir="$TEMP_DIR/extracted"
+
+    log_info "Installing fonts to $NERD_FONTS_DIR..."
+
+    # Create font directory if it doesn't exist
+    mkdir -p "$NERD_FONTS_DIR"
+
+    # Count total .ttf files
+    local ttf_count
+    ttf_count=$(find "$extract_dir" -name "*.ttf" -o -name "*.otf" | wc -l)
+
+    if [[ $ttf_count -eq 0 ]]; then
+        log_error "No font files found in archive"
+        return 1
+    fi
+
+    log_info "Found $ttf_count font files to install"
+
+    # Install all TTF and OTF files
+    local installed=0
+    while IFS= read -r font_file; do
+        cp "$font_file" "$NERD_FONTS_DIR/"
+        installed=$((installed + 1))
+    done < <(find "$extract_dir" -name "*.ttf" -o -name "*.otf")
+
+    log_success "Installed $installed font files"
+    return 0
+}
+
+refresh_font_cache() {
+    log_info "Refreshing font cache..."
+
+    if [[ "$OS_TYPE" == "linux" ]]; then
+        if command -v fc-cache >/dev/null 2>&1; then
+            fc-cache -fv "$FONT_DIR" >/dev/null 2>&1
+            log_success "Font cache refreshed"
+        else
+            log_error "fc-cache not found. Please install fontconfig package"
+            return 1
+        fi
+    elif [[ "$OS_TYPE" == "macos" ]]; then
+        # macOS automatically detects new fonts, but we can force a refresh
+        log_info "macOS will automatically detect new fonts"
+        log_info "You may need to restart applications to see the new fonts"
+    fi
+
+    return 0
+}
+
+verify_installation() {
+    log_info "Verifying installation..."
+
+    # Wait a moment for font cache to update
+    sleep 2
+
+    if check_already_installed; then
+        log_success "JetBrainsMono Nerd Font successfully installed and detected"
+        return 0
+    else
+        log_error "Font installed but not detected in font cache"
+        log_info "Try running: fc-cache -fv"
+        return 1
+    fi
+}
+
+print_configuration_instructions() {
+    cat <<'EOF'
+
+========================================
+NERD FONT INSTALLATION COMPLETE
+========================================
+
+JetBrainsMono Nerd Font has been installed successfully!
+
+NEXT STEPS - Configure Your Terminal:
+--------------------------------------
+
+1. TERMINAL EMULATOR CONFIGURATION:
+
+   GNOME Terminal / GNOME Console:
+   - Right-click in terminal → Preferences
+   - Select your profile → Text
+   - Change font to "JetBrainsMono Nerd Font Mono"
+   - Recommended size: 11-12pt
+
+   Alacritty (~/.config/alacritty/alacritty.yml):
+   font:
+     normal:
+       family: "JetBrainsMono Nerd Font Mono"
+       style: Regular
+     size: 12.0
+
+   Kitty (~/.config/kitty/kitty.conf):
+   font_family      JetBrainsMono Nerd Font Mono
+   bold_font        JetBrainsMono Nerd Font Mono Bold
+   italic_font      JetBrainsMono Nerd Font Mono Italic
+   font_size        12.0
+
+   WezTerm (~/.config/wezterm/wezterm.lua):
+   config.font = wezterm.font("JetBrainsMono Nerd Font Mono")
+   config.font_size = 12.0
+
+   Tilix:
+   - Preferences → Profile → Custom Font
+   - Select "JetBrainsMono Nerd Font Mono"
+
+2. TMUX (if using):
+   - tmux will inherit your terminal font settings
+   - No additional configuration needed
+
+3. NEOVIM:
+   - Neovim uses your terminal font automatically
+   - Nerd font glyphs will now display correctly in:
+     * nvim-tree
+     * lualine
+     * telescope
+     * any plugin using devicons
+
+4. STARSHIP:
+   - Your starship prompt will now display glyphs correctly
+   - No configuration changes needed
+
+5. VERIFY INSTALLATION:
+
+   Test nerd font glyphs:
+   echo -e "\ue0b0 \uf898 \uf09b \ue702 \uf415"
+
+   You should see: arrow, folder, github, apple, lock icons
+
+   List available fonts:
+   fc-list | grep -i "JetBrainsMono"
+
+FONT VARIANTS INSTALLED:
+-------------------------
+- JetBrainsMono Nerd Font Mono (recommended for coding)
+- Regular, Bold, Italic, Bold Italic weights
+
+TROUBLESHOOTING:
+----------------
+- If glyphs don't appear, restart your terminal
+- Check font is selected: fc-match "JetBrainsMono Nerd Font Mono"
+- Force refresh cache: fc-cache -fv ~/.local/share/fonts
+- Some terminals may need restart to detect new fonts
+
+========================================
+
+EOF
+}
+
+# ===== MAIN EXECUTION =====
+main() {
+    log_info "Starting Nerd Font installation (${FONT_NAME} ${FONT_VERSION})"
+    log_info "Platform: $OS_TYPE"
+
+    # Check if already installed (idempotency)
+    if check_already_installed; then
+        log_info "Installation already complete. Skipping."
+        exit 0
+    fi
+
+    # Check dependencies
+    if ! command -v curl >/dev/null 2>&1; then
+        log_error "curl is required but not installed"
+        exit 1
+    fi
+
+    if ! command -v unzip >/dev/null 2>&1; then
+        log_error "unzip is required but not installed"
+        exit 1
+    fi
+
+    if [[ "$OS_TYPE" == "linux" ]] && ! command -v fc-cache >/dev/null 2>&1; then
+        log_error "fontconfig is required but not installed"
+        log_info "Install with: sudo apt install fontconfig"
+        exit 1
+    fi
+
+    # Download
+    local zip_file
+    if ! zip_file=$(download_font); then
+        log_error "Font download failed"
+        exit 1
+    fi
+
+    # Extract
+    if ! extract_font "$zip_file"; then
+        log_error "Font extraction failed"
+        exit 1
+    fi
+
+    # Install
+    if ! install_font; then
+        log_error "Font installation failed"
+        exit 1
+    fi
+
+    # Refresh font cache
+    if ! refresh_font_cache; then
+        log_error "Failed to refresh font cache"
+        exit 1
+    fi
+
+    # Verify
+    if ! verify_installation; then
+        log_error "Installation verification failed"
+        exit 1
+    fi
+
+    # Print configuration instructions
+    print_configuration_instructions
+
+    log_success "Nerd Font installation complete!"
+    exit 0
+}
+
+main "$@"

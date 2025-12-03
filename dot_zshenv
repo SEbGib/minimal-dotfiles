@@ -1,0 +1,6 @@
+# Skip Ubuntu's global compinit (we handle it ourselves in .zshrc)
+# This prevents "insecure files" warning from /etc/zsh/zshrc
+skip_global_compinit=1
+
+# Cargo/Rust environment
+. "$HOME/.cargo/env"

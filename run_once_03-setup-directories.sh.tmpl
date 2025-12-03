@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+
+set -eufo pipefail
+
+echo "  Configuration des dossiers de développement..."
+
+# Création des dossiers principaux
+echo "📦 Création des dossiers de base..."
+
+# Dossiers essentiels
+mkdir -p "$HOME/.local/bin"
+mkdir -p "$HOME/.config"
+mkdir -p "$HOME/.cache"
+mkdir -p "$HOME/projects"
+
+echo "    Dossiers de développement créés"
+
+# Configuration des dossiers tmux
+echo "📦 Configuration tmux..."
+mkdir -p "$HOME/.config/tmux/scripts"
+mkdir -p "$HOME/.config/tmux/themes"
+
+# Configuration des dossiers Neovim
+echo "📦 Configuration Neovim..."
+mkdir -p "$HOME/.config/nvim/lua"
+mkdir -p "$HOME/.config/nvim/after/plugin"
+
+# Dossier SSH
+echo "🔐 Configuration sécurité..."
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+# GPG directory removed - not configured by default
+# mkdir -p "$HOME/.gnupg"
+# chmod 700 "$HOME/.gnupg"
+
+# Dossiers de cache et données
+echo "💾 Configuration cache et données..."
+mkdir -p "$HOME/.cache/zsh"
+mkdir -p "$HOME/.cache/nvim"
+mkdir -p "$HOME/.cache/tmux"
+
+# Dossiers spécifiques aux outils
+{{- if lookPath "node" }}
+mkdir -p "$HOME/.npm-global"
+echo "    Dossier npm global créé"
+{{- end }}
+
+{{- if lookPath "composer" }}
+mkdir -p "$HOME/.composer"
+echo "    Dossier Composer créé"
+{{- end }}
+
+# Configuration des permissions
+echo "  Configuration des permissions..."
+chmod 755 "$HOME/.local/bin"
+chmod 755 "$HOME/projects"
+
+# Création de fichiers de configuration vides si nécessaires
+echo "📄 Création des fichiers de configuration..."
+
+# Fichier d'environnement local
+touch "$HOME/.env"
+chmod 600 "$HOME/.env"
+
+# Fichiers de configuration locale
+touch "$HOME/.zshrc.local"
+touch "$HOME/.gitconfig.local"
+touch "$HOME/.tmux.conf.local"
+
+# Fichier d'historique Zsh
+touch "$HOME/.zsh_history"
+chmod 600 "$HOME/.zsh_history"
+
+{{- if eq .chezmoi.os "darwin" }}
+# Configuration spécifique macOS
+echo "🍎 Configuration spécifique macOS..."
+
+# Dossiers Applications
+mkdir -p "$HOME/Applications"
+
+# Configuration Homebrew
+if [[ -d "/opt/homebrew" ]]; then
+    mkdir -p "$HOME/.config/homebrew"
+fi
+{{- end }}
+
+{{- if eq .chezmoi.os "linux" }}
+# Configuration spécifique Linux
+echo "🐧 Configuration spécifique Linux..."
+
+# Dossiers XDG
+mkdir -p "$HOME/.local/share"
+mkdir -p "$HOME/.local/state"
+
+# Configuration systemd utilisateur
+mkdir -p "$HOME/.config/systemd/user"
+{{- end }}
+
+# Création d'un fichier de bienvenue dans projects
+cat > "$HOME/projects/README.md" << 'EOF'
+
+##   Workflows
+
+- `dev-symfony <nom>` : Crée une session tmux complète pour Symfony
+- `dev-ts <nom>` : Crée une session tmux complète pour TypeScript
+- `ts` : Sélecteur de projet interactif avec fzf
+EOF
+
+echo ""
+echo "  Configuration des dossiers terminée!"
+echo ""
+echo "  Dossiers créés :"
+echo "   • ~/.local/bin (binaires personnels)"
+echo "   • ~/projects/* (projets de développement)"
+echo "   • ~/.config/* (configurations)"
+echo "   • ~/.cache/* (cache applications)"
+echo ""
+echo "🔐 Sécurité :"
+echo "   • Permissions SSH configurées (700)"
+echo "   • Fichier .env créé avec permissions restrictives (600)"
+echo ""
+echo "📄 Fichiers de configuration locale créés :"
+echo "   • ~/.zshrc.local"
+echo "   • ~/.gitconfig.local" 
+echo "   • ~/.tmux.conf.local"
+echo ""
+echo "  Consultez ~/projects/README.md pour les workflows de développement"

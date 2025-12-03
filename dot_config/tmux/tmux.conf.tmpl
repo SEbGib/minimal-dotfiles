@@ -1,0 +1,295 @@
+# Modern tmux configuration with Rose Pine theme
+# Based on Sin-cy/dotfiles structure with Rose Pine integration
+# Hostname: {{ .chezmoi.hostname }}
+# OS: {{ .chezmoi.os }}
+
+# ===== BASIC SETTINGS =====
+# Enable true color support
+set -g default-terminal "tmux-256color"
+{{- if eq .chezmoi.os "darwin" }}
+set -ag terminal-overrides ",xterm-256color:RGB"
+set -gq allow-passthrough on
+{{- else }}
+set -ga terminal-overrides ",*256col*:Tc"
+set -ga terminal-overrides '*:Ss=\E[%p1%d q:Se=\E[ q'
+set-environment -g COLORTERM "truecolor"
+{{- end }}
+
+# Environment variables for Neovim
+set-environment -g EDITOR "nvim"
+set-environment -g VISUAL "nvim"
+
+# Start windows and panes at 1
+set -g base-index 1
+set -g pane-base-index 1
+set -g renumber-windows on
+
+# Prefix key
+set-option -g prefix C-b
+set-option -g prefix2 none
+
+# Performance settings
+set -g mouse on
+set -g history-limit 100000
+set -g display-time 2000
+set -g status-interval 1
+set -g focus-events on
+set -g aggressive-resize on
+
+# Escape time: balance between Vim responsiveness and SSH stability
+# 0 = optimal for local Vim, but can cause issues over SSH
+# 10 = good compromise for SSH usage while maintaining Vim performance
+{{- if (index . "work" | default false) }}
+set -sg escape-time 10    # SSH-optimized value for work machine
+{{- else }}
+set -sg escape-time 10    # Safe default for all environments
+{{- end }}
+set -g repeat-time 600
+
+# ===== AUTOMATIC WINDOW RENAMING =====
+# Enable automatic window renaming based on directory and git branch
+set -g automatic-rename on
+set -g automatic-rename-format '#{b:pane_current_path}'
+
+# Use custom script for intelligent window naming (dir/branch format)
+# Hook runs on pane focus, directory change, and periodic intervals
+set-hook -g after-select-pane 'run-shell "~/.local/bin/tmux-auto-rename"'
+set-hook -g pane-focus-in 'run-shell "~/.local/bin/tmux-auto-rename"'
+
+# Also run on window creation
+set-hook -g window-linked 'run-shell "~/.local/bin/tmux-auto-rename"'
+
+# ===== KEY BINDINGS =====
+# Reload config
+unbind r
+bind r source-file ~/.config/tmux/tmux.conf \; display "  Config reloaded!"
+
+# Split windows
+unbind %
+bind - split-window -h -c "#{pane_current_path}"
+unbind '"'
+bind _ split-window -v -c "#{pane_current_path}"
+
+# Copy mode
+unbind v
+bind v copy-mode
+
+# Resize panes with hjkl
+bind -r j resize-pane -D 5
+bind -r k resize-pane -U 5
+bind -r l resize-pane -R 5
+bind -r h resize-pane -L 5
+
+# Additional navigation for AZERTY/French keyboards
+# Alternative pane navigation (prefix + arrow keys)
+bind -r Up select-pane -U
+bind -r Down select-pane -D
+bind -r Left select-pane -L
+bind -r Right select-pane -R
+
+# AZERTY-specific hjkl alternatives (prefix + keys)
+bind -r H select-pane -L
+bind -r J select-pane -D
+bind -r K select-pane -U
+bind -r L select-pane -R
+
+# Maximize panes
+bind -r m resize-pane -Z
+
+# New session
+bind-key n command-prompt "new-session -s '%%'"
+
+# Session fuzzy finder
+bind-key -r f run-shell "tmux neww ~/.config/tmux/scripts/tmux-sessionizer"
+
+{{- if (index . "work" | default false) }}
+# Work machine specific sessions
+bind-key W new-window -n 'dev' 'nvim'
+bind-key S new-window -n 'shell'
+bind-key L new-window -n 'logs' 'tail -f /var/log/syslog'
+{{- end }}
+
+# ===== DEVELOPMENT TOOLS POPUPS =====
+# IMPORTANT: Keybindings chosen to avoid conflicts with default tmux bindings
+# Avoided: 'd' (detach-client), 'b' (last-window)
+
+# Lazygit popup (prefix + g)
+bind-key g display-popup -d '#{pane_current_path}' -w 95% -h 95% -E lazygit
+
+# Lazydocker popup (prefix + @) - Chosen to avoid conflict with 'd' (detach)
+# On AZERTY keyboard: Shift + à
+bind-key @ display-popup -w 95% -h 95% -E lazydocker
+
+# Rainfrog database TUI popup (prefix + Shift+B)
+# Uppercase B avoids conflict with 'b' (last-window)
+bind-key B display-popup -w 95% -h 95% -E rainfrog
+
+# Development tools menu (prefix + T for "Tools")
+bind-key T display-menu -T "#[align=centre]   Development Tools" -x C -y C \
+    "  Lazygit (current dir)" g "display-popup -d '#{pane_current_path}' -w 95% -h 95% -E lazygit" \
+    "  Lazydocker" @ "display-popup -w 95% -h 95% -E lazydocker" \
+    "  Rainfrog (database)" B "display-popup -w 95% -h 95% -E rainfrog" \
+    "" \
+    "  htop" h "display-popup -w 80% -h 80% -E htop" \
+    "  File browser (ranger)" r "display-popup -d '#{pane_current_path}' -w 95% -h 95% -E ranger"
+
+# ===== VIM MODE SETTINGS =====
+set-window-option -g mode-keys vi
+bind-key -T copy-mode-vi 'v' send -X begin-selection
+bind-key -T copy-mode-vi 'y' send -X copy-selection
+
+# Clipboard integration
+{{- if eq .chezmoi.os "darwin" }}
+bind-key -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "pbcopy"
+bind-key -T copy-mode-vi Enter send-keys -X copy-pipe-and-cancel "pbcopy"
+{{- else }}
+bind-key -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "xclip -selection clipboard"
+bind-key -T copy-mode-vi Enter send-keys -X copy-pipe-and-cancel "xclip -selection clipboard"
+{{- end }}
+
+# Disable mouse drag end
+unbind -T copy-mode-vi MouseDragEnd1Pane
+
+# ===== PLUGINS =====
+# Plugin manager path
+set-environment -g TMUX_PLUGIN_MANAGER_PATH ~/.config/tmux/.tmux/plugins
+
+# Core plugins
+set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'tmux-plugins/tmux-sensible'
+# vim-tmux-navigator for seamless integration with nvim
+set -g @plugin 'christoomey/vim-tmux-navigator'
+
+# NOTE: Manual bindings commented out - let the plugin handle navigation
+# The plugin automatically creates the correct bindings for C-h/j/k/l
+# If you need to debug, uncomment the bindings below
+
+# Smart pane switching with awareness of Vim splits.
+# See: https://github.com/christoomey/vim-tmux-navigator
+# is_vim="ps -o state= -o comm= -t '#{pane_tty}' \
+#     | grep -iqE '^[^TXZ ]+ +(\\S+\\/)?g?(view|n?vim?x?)(diff)?$'"
+# bind-key -n 'C-h' if-shell "$is_vim" 'send-keys C-h'  'select-pane -L'
+# bind-key -n 'C-j' if-shell "$is_vim" 'send-keys C-j'  'select-pane -D'
+# bind-key -n 'C-k' if-shell "$is_vim" 'send-keys C-k'  'select-pane -U'
+# bind-key -n 'C-l' if-shell "$is_vim" 'send-keys C-l'  'select-pane -R'
+#
+# tmux_version='$(tmux -V | sed -En "s/^tmux ([0-9]+(.[0-9]+)?).*/\1/p")'
+# if-shell -b '[ "$(echo "$tmux_version < 3.0" | bc)" = 1 ]' \
+#     "bind-key -n 'C-\\' if-shell \"$is_vim\" 'send-keys C-\\'  'select-pane -l'"
+# if-shell -b '[ "$(echo "$tmux_version >= 3.0" | bc)" = 1 ]' \
+#     "bind-key -n 'C-\\' if-shell \"$is_vim\" 'send-keys C-\\\\'  'select-pane -l'"
+#
+# bind-key -T copy-mode-vi 'C-h' select-pane -L
+# bind-key -T copy-mode-vi 'C-j' select-pane -D
+# bind-key -T copy-mode-vi 'C-k' select-pane -U
+# bind-key -T copy-mode-vi 'C-l' select-pane -R
+# bind-key -T copy-mode-vi 'C-\' select-pane -l
+
+# NOTE: AZERTY fallback binding removed - vim-tmux-navigator handles all navigation
+# If you need AZERTY-specific bindings, use the prefix + H/J/K/L bindings defined above
+
+# Session management
+set -g @plugin 'omerxx/tmux-sessionx'
+
+# Menus
+set -g @plugin 'jaclu/tmux-menus'
+set -g @menus_trigger 'M'
+
+# Utilities
+set -g @plugin 'tmux-plugins/tmux-yank'
+set -g @plugin 'tmux-plugins/tmux-resurrect'
+set -g @plugin 'tmux-plugins/tmux-continuum'
+
+{{- if eq .chezmoi.os "darwin" }}
+# macOS specific plugins
+{{- else }}
+# Linux specific plugins
+set -g @plugin 'fcsonline/tmux-thumbs'
+{{- end }}
+
+# ===== ROSE PINE THEME CONFIGURATION =====
+set -g @plugin 'rose-pine/tmux'
+set -g @plugin 'tmux-plugins/tmux-battery'
+
+# Configure Rose Pine
+set -g @rose_pine_variant 'main' # Options are 'main', 'moon', 'dawn'
+{{- if (index . "work" | default false) }}
+# Work machine visual indicators with nerd font icons
+set -g @rose_pine_host 'on'
+set -g @rose_pine_show_current_program 'on'
+set -g @rose_pine_left_separator '  '
+set -g @rose_pine_right_separator '  '
+set -g @rose_pine_field_separator ' │ '
+set -g @rose_pine_status_left '   WORK'
+{{- else }}
+set -g @rose_pine_host 'off'
+set -g @rose_pine_status_left ''
+{{- end }}
+set -g @rose_pine_date_time '%H:%M'
+set -g @rose_pine_user 'off'
+set -g @rose_pine_directory 'on'
+set -g @rose_pine_bar_bg_disable 'on'
+set -g @rose_pine_bar_bg_disabled_color_option 'default'
+
+# ===== PLUGIN CONFIGURATIONS =====
+# tmux-sessionx
+set -g @sessionx-bind 'o'
+set -g @sessionx-window-height '85%'
+set -g @sessionx-window-width '75%'
+
+# tmux-resurrect
+set -g @resurrect-strategy-nvim 'session'
+set -g @resurrect-capture-pane-contents 'on'
+set -g @resurrect-save-shell-history 'on'
+set -g @resurrect-processes 'nvim vim php node npm composer symfony'
+
+# tmux-continuum
+set -g @continuum-restore 'on'
+set -g @continuum-save-interval '10'
+{{- if eq .chezmoi.os "darwin" }}
+set -g @continuum-boot 'on'
+set -g @continuum-boot-options 'iterm'
+{{- end }}
+
+# tmux-yank
+{{- if eq .chezmoi.os "darwin" }}
+set -g @yank_selection 'clipboard'
+set -g @yank_selection_mouse 'clipboard'
+{{- else }}
+set -g @yank_selection 'primary'
+set -g @yank_selection_mouse 'clipboard'
+{{- end }}
+
+{{- if ne .chezmoi.os "darwin" }}
+# tmux-thumbs (Linux)
+set -g @thumbs-key F
+set -g @thumbs-alphabet dvorak-homerow
+set -g @thumbs-reverse enabled
+set -g @thumbs-unique enabled
+{{- end }}
+
+{{- if (index . "work" | default false) }}
+# ===== WORK MACHINE CUSTOM STATUS BAR =====
+# Override status bar for work machine with distinctive styling
+set -g status-style 'bg=#ff6b6b,fg=#ffffff'  # Red background for work machine
+set -g status-left-length 50
+set -g status-right-length 100
+set -g status-left '#[bg=#ff6b6b,fg=#ffffff,bold]   WORK #[bg=#191724,fg=#ff6b6b]'
+set -g status-right '#[fg=#ff6b6b,bg=#191724]#[bg=#ff6b6b,fg=#ffffff] %H:%M #[bg=#ff6b6b,fg=#ffffff,bold] %d/%m '
+
+# Window status format for work machine
+set -g window-status-current-format '#[fg=#ff6b6b,bg=#191724]#[bg=#ff6b6b,fg=#ffffff,bold] #I: #W #[fg=#ff6b6b,bg=#191724]'
+set -g window-status-format '#[fg=#6e6a86,bg=#191724] #I: #W '
+{{- end }}
+
+# ===== LOCAL CONFIGURATION =====
+# Include local configuration if it exists
+if-shell "test -f ~/.tmux.conf.local" "source ~/.tmux.conf.local"
+
+# ===== INITIALIZE TPM =====
+# Auto-install TPM if not present
+if-shell "test ! -d ~/.config/tmux/.tmux/plugins/tpm" \
+   "run 'git clone https://github.com/tmux-plugins/tpm ~/.config/tmux/.tmux/plugins/tpm && ~/.config/tmux/.tmux/plugins/tpm/bin/install_plugins'"
+
+# Initialize plugin manager (keep at the very bottom)
+run '~/.config/tmux/.tmux/plugins/tpm/tpm'

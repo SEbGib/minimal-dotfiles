@@ -1,0 +1,365 @@
+# Aliases personnalisés - Générés par Chezmoi
+# Hostname: {{ .chezmoi.hostname }}
+# OS: linux
+
+# ===== NAVIGATION =====
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias ~='cd ~'
+alias -- -='cd -'  # Revenir au dossier précédent
+
+# Navigation rapide vers dossiers importants
+alias proj='cd ~/projects'
+alias work='cd ~/work'
+alias company='cd ~/company'
+alias config='cd ~/.config'
+alias dotfiles='cd ~/.local/share/chezmoi'
+
+# ===== LISTING AMÉLIORÉ =====
+# Eza (remplacement moderne de ls)
+alias ls='eza --icons --group-directories-first'
+alias ll='eza -la --icons --git --group-directories-first --time-style=long-iso'
+alias la='eza -la --icons --group-directories-first'
+alias lt='eza --tree --icons --level=3 --group-directories-first'
+alias lta='eza --tree --icons --level=3 -a --group-directories-first'
+alias l1='eza --tree --icons --level=1'
+alias l2='eza --tree --icons --level=2'
+alias recent='eza -la --icons --sort=modified --reverse'
+alias size='eza -la --icons --sort=size --reverse'
+
+# ===== OUTILS MODERNES =====
+alias cat='bat --style=auto'
+alias catp='bat --style=plain'
+alias catl='bat --style=numbers'
+alias find='fd'
+alias findi='fd -i'  # Case insensitive
+alias grep='rg'
+alias grepi='rg -i'  # Case insensitive
+
+# Nouveaux outils haute priorité
+alias jqp='jq .'  # Pretty print JSON
+alias jqc='jq -c'  # Compact JSON
+alias jqr='jq -r'  # Raw output
+alias top='btop'
+alias htop='btop'  # Prefer btop over htop
+alias gui='gitui'  # Quick git UI
+alias count='scc'
+alias loc='scc'  # Lines of code
+alias sloc='scc --by-file'  # Lines of code by file
+# HTTPie aliases - DO NOT alias curl as it breaks many scripts
+alias http='http'  # Explicit httpie
+alias get='http GET'
+alias post='http POST'
+alias put='http PUT'
+alias delete='http DELETE'
+
+# ===== GIT AVANCÉ =====
+alias g='git'
+alias gst='git status'
+alias gss='git status --short'
+alias ga='git add'
+alias gaa='git add --all'
+alias gap='git add --patch'
+alias gc='git commit'
+alias gcm='git commit -m'
+alias gca='git commit --amend'
+alias gcan='git commit --amend --no-edit'
+alias gco='git checkout'
+alias gcb='git checkout -b'
+alias gcd='git checkout develop'
+alias gcm='git checkout main || git checkout master'
+alias gp='git push'
+alias gpu='git push -u origin HEAD'
+alias gpf='git push --force-with-lease'
+alias gpl='git pull'
+alias gpr='git pull --rebase'
+alias gf='git fetch'
+alias gfa='git fetch --all --prune'
+alias gd='git diff'
+alias gds='git diff --staged'
+alias gdh='git diff HEAD'
+alias gl='git log --oneline --graph --decorate --all -20'
+alias gll='git log --oneline --graph --decorate --all'
+alias glp='git log --pretty=format:"%C(yellow)%h%Creset -%C(red)%d%Creset %s %C(green)(%cr) %C(blue)<%an>%Creset" --abbrev-commit'
+alias gsh='git show'
+alias gb='git branch'
+alias gba='git branch -a'
+alias gbd='git branch -d'
+alias gbD='git branch -D'
+alias gr='git remote'
+alias grv='git remote -v'
+alias grs='git reset'
+alias grsh='git reset --hard'
+alias grss='git reset --soft'
+alias gst='git stash'
+alias gstp='git stash pop'
+alias gstl='git stash list'
+alias gsts='git stash show'
+alias gt='git tag'
+alias gta='git tag -a'
+alias gtd='git tag -d'
+alias gm='git merge'
+alias gmn='git merge --no-ff'
+alias grb='git rebase'
+alias grbi='git rebase -i'
+alias grbc='git rebase --continue'
+alias grba='git rebase --abort'
+alias lg='lazygit'
+
+# Git helpers
+alias gclean='git branch --merged | grep -v "\\*\\|main\\|master\\|develop" | xargs -n 1 git branch -d'
+alias gundo='git reset HEAD~1'
+alias gwip='git add -A && git commit -m "WIP: work in progress"'
+alias gunwip='git log -n 1 | grep -q -c "WIP" && git reset HEAD~1'
+alias gignore='git update-index --assume-unchanged'
+alias gunignore='git update-index --no-assume-unchanged'
+
+# ===== TMUX =====
+alias t='tmux'
+alias ta='tmux attach'
+alias tad='tmux attach -d'  # Detach others
+# ts() function is defined in .zshrc for advanced tmux session management
+alias tl='tmux list-sessions'
+alias tk='tmux kill-session'
+alias tka='tmux kill-server'  # Kill all
+alias td='tmux detach'
+alias tr='tmux source-file ~/.config/tmux/tmux.conf'  # Reload config
+
+# ===== DÉVELOPPEMENT =====
+# Éditeurs
+alias v='nvim'
+alias vim='nvim'
+alias vi='nvim'
+alias e='$EDITOR'
+alias code.='code .'
+alias subl.='subl .'
+# PHP / Symfony
+alias sf='symfony'
+alias sfc='symfony console'
+alias sfcc='symfony console cache:clear'
+alias sfcw='symfony console cache:warmup'
+alias sfr='symfony console router:match'
+alias sfd='symfony console debug:router'
+alias sfserve='symfony serve'
+alias sfstop='symfony serve:stop'
+alias sftest='symfony run bin/phpunit'
+alias composer='composer'
+alias ci='composer install'
+alias cu='composer update'
+alias cr='composer require'
+alias crd='composer require --dev'
+alias cs='composer show'
+alias phpunit='vendor/bin/phpunit'
+alias phpstan='vendor/bin/phpstan'
+alias phpcs='vendor/bin/php-cs-fixer'
+# Node.js / NPM / Yarn
+alias n='node'
+alias nr='npm run'
+alias ni='npm install'
+alias nis='npm install --save'
+alias nid='npm install --save-dev'
+alias nig='npm install -g'
+alias nu='npm uninstall'
+alias nup='npm update'
+alias nci='npm ci'
+alias nls='npm list'
+alias nlsg='npm list -g --depth=0'
+alias nt='npm test'
+alias nb='npm run build'
+alias nd='npm run dev'
+alias ns='npm start'
+alias nw='npm run watch'
+alias npx='npx'
+
+# Yarn
+alias y='yarn'
+alias ya='yarn add'
+alias yad='yarn add --dev'
+alias yr='yarn remove'
+alias yi='yarn install'
+alias yu='yarn upgrade'
+alias ys='yarn start'
+alias yb='yarn build'
+alias yt='yarn test'
+alias yd='yarn dev'
+
+# Package managers comparison
+alias pnpm='pnpm'
+alias pi='pnpm install'
+alias pa='pnpm add'
+alias pad='pnpm add -D'
+alias pr='pnpm run'
+# Docker
+alias d='docker'
+alias di='docker images'
+alias dps='docker ps'
+alias dpsa='docker ps -a'
+alias dr='docker run'
+alias drit='docker run -it'
+alias drm='docker rm'
+alias drmi='docker rmi'
+alias de='docker exec'
+alias deit='docker exec -it'
+alias dl='docker logs'
+alias dlf='docker logs -f'
+alias db='docker build'
+alias dp='docker pull'
+alias dpu='docker push'
+alias dn='docker network'
+alias dv='docker volume'
+
+# Docker Compose
+alias dc='docker compose'
+alias dcu='docker compose up'
+alias dcud='docker compose up -d'
+alias dcd='docker compose down'
+alias dcb='docker compose build'
+alias dcl='docker compose logs'
+alias dclf='docker compose logs -f'
+alias dce='docker compose exec'
+alias dcr='docker compose run'
+alias dcs='docker compose ps'
+alias dcstop='docker compose stop'
+alias dcstart='docker compose start'
+alias dcrestart='docker compose restart'
+
+# n8n Workflow Automation
+alias n8n='n8n-status'
+alias n8nstart='n8n-start'
+alias n8nstop='n8n-stop'
+alias n8nrestart='n8n-restart'
+alias n8nlogs='n8n-logs'
+alias n8nbackup='n8n-backup'
+alias n8nopen='open http://localhost:5678 || xdg-open http://localhost:5678 2>/dev/null'
+
+# ===== SYSTÈME =====
+alias h='history'
+alias c='clear'
+alias cls='clear'
+alias q='exit'
+alias reload='exec $SHELL'
+alias path='echo -e ${PATH//:/\n}'
+alias now='date +"%T"'
+alias nowdate='date +"%d-%m-%Y"'
+alias week='date +%V'
+
+# Processus
+alias psg='ps aux | grep'
+alias k9='kill -9'
+alias ka='killall'
+
+# Réseau
+alias ports='netstat -tulanp'
+alias listening='lsof -i -P -n | grep LISTEN'
+alias myip='curl -s https://ipinfo.io/ip'
+alias localip='hostname -I | cut -d" " -f1'
+alias flushdns='sudo systemctl restart systemd-resolved'
+
+# ===== UTILITAIRES =====
+# Archives
+alias tgz='tar -czf'
+alias untgz='tar -xzf'
+alias zip='zip -r'
+
+# Recherche
+alias findname='find . -name'
+alias findtype='find . -type'
+alias largest='find . -type f -exec ls -s {} + | sort -n -r | head -20'
+
+# Permissions
+alias mx='chmod +x'
+alias 000='chmod 000'
+alias 644='chmod 644'
+alias 755='chmod 755'
+alias 777='chmod 777'
+
+# ===== CONFIGURATION SPÉCIFIQUE OS =====
+# Linux spécifique
+alias aptup='sudo apt update && sudo apt upgrade && sudo apt autoremove'
+alias install='sudo apt install'
+alias remove='sudo apt remove'
+alias search='apt search'
+alias info='apt show'
+alias open='xdg-open'
+alias pbcopy='xclip -selection clipboard'
+alias pbpaste='xclip -selection clipboard -o'
+
+# ===== RACCOURCIS CONTEXTUELS =====
+# Entreprise
+alias vpn='sudo openconnect --config=~/.openconnect/company.conf'
+alias k='kubectl'
+alias kctx='kubectx'
+alias kns='kubens'
+alias kgp='kubectl get pods'
+alias kgs='kubectl get services'
+alias kgd='kubectl get deployments'
+alias kl='kubectl logs'
+alias kd='kubectl describe'
+alias ke='kubectl edit'
+alias kdel='kubectl delete'
+
+# ===== FONCTIONS COMME ALIASES =====
+# This section is now empty to avoid conflicts
+
+# ===== DIVERS =====
+# Météo
+alias weather='curl wttr.in/Paris'
+
+# Speedtest
+alias speedtest='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -'
+
+# Générateur de mots de passe
+alias genpass='openssl rand -base64 32'
+
+# QR Code pour partager texte
+alias qr='function _qr(){ echo "$1" | qrencode -t UTF8; }; _qr'
+
+# Aliases pour dotfiles avec Chezmoi
+alias cz='chezmoi'
+alias cza='chezmoi apply'
+alias czd='chezmoi diff'
+alias cze='chezmoi edit'
+alias czs='chezmoi status'
+alias czu='chezmoi update'
+alias czcd='chezmoi cd'
+alias czf='echo "  Clearing chezmoi cache..." && rm -f ~/.config/chezmoi/chezmoistate.boltdb && rm -rf ~/.cache/chezmoi && echo "  Cache cleared" && chezmoi apply --force'
+# Glance Dashboard
+alias glance='glance -config ~/.config/glance/glance.yml'
+alias glance-start='cd ~/.config/glance && docker compose up -d'
+alias glance-stop='cd ~/.config/glance && docker compose down'
+alias glance-logs='cd ~/.config/glance && docker compose logs -f'
+alias glance-restart='glance-stop && glance-start'
+alias glance-validate='glance -config ~/.config/glance/glance.yml config:validate'
+
+# ===== CHROME DEBUGGING =====
+# Chrome Debug Mode (Linux)
+alias chrome-debug='google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug &'
+alias chrome-debug-headless='google-chrome --headless --remote-debugging-port=9222 &'
+
+# Chrome debugging utilities
+alias chrome-debug-check='curl -s http://localhost:9222/json/version | jq .'
+alias chrome-debug-tabs='curl -s http://localhost:9222/json | jq .'
+alias chrome-debug-stop='pkill -f "remote-debugging-port=9222"'
+
+# ===== CLAUDE CODE & CCUSAGE =====
+# Claude Code
+alias c='claude'
+alias chat='claude'
+alias ai='claude'
+
+# Tmux sessionizer
+alias work-session='ts'  # Utilise la fonction ts() définie dans .zshrc
+
+echo "  Aliases chargés ($(wc -l < ~/.aliases) lignes)"
+
+# ═══════════════════════════════════════════════════════════════
+#  MCP Memory Service
+# ═══════════════════════════════════════════════════════════════
+
+alias memory-status='ls -lh ~/.mcp-memory/memory.db 2>/dev/null && echo "Memories:" && sqlite3 ~/.mcp-memory/memory.db "SELECT COUNT(*) FROM memories;" 2>/dev/null || echo "Database not yet created - will be created on first use"'
+alias memory-backup='cp ~/.mcp-memory/memory.db ~/.config/mcp-memory-backups/memory-$(date +%Y%m%d-%H%M%S).db && echo "Backup created"'
+alias memory-export='~/.local/bin/export-memory-to-obsidian'
+alias memory-config='${EDITOR:-nvim} ~/.mcp-memory/config.json'
+alias memory-logs='tail -f ~/.mcp-memory/logs/*.log 2>/dev/null || echo "No logs yet"'
+

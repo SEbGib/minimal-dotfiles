@@ -1,0 +1,311 @@
+#!/usr/bin/env bash
+# run_once_19-install-mcp-memory-service.sh.tmpl
+# MCP Memory Service installation for Claude Code agents
+# Universal memory layer with intelligent auto-population and semantic search
+
+set -euo pipefail
+
+echo "════════════════════════════════════════════════════════════"
+echo "  MCP Memory Service Installation"
+echo "════════════════════════════════════════════════════════════"
+
+# Check if running in CI environment
+is_ci() {
+    [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]] || [[ -n "${CONTINUOUS_INTEGRATION:-}" ]]
+}
+
+if is_ci; then
+    echo "⏭️  CI environment detected - skipping MCP Memory Service installation"
+    exit 0
+fi
+
+# Check for required tools
+if ! command -v uv &>/dev/null; then
+    echo "❌ uv not found - required for installation"
+    echo "   Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+fi
+
+if ! command -v git &>/dev/null; then
+    echo "❌ git not found - required for installation"
+    exit 1
+fi
+
+echo "✅ Found required tools: uv, git"
+
+# Create memory service directory
+MEMORY_DIR="$HOME/.mcp-memory"
+VENV_DIR="$HOME/.local/mcp-memory-service"
+BACKUP_DIR="$HOME/.config/mcp-memory-backups"
+
+mkdir -p "$MEMORY_DIR" "$VENV_DIR" "$BACKUP_DIR"
+echo "✅ Created directories:"
+echo "   - $MEMORY_DIR"
+echo "   - $VENV_DIR"
+echo "   - $BACKUP_DIR"
+
+# Create virtual environment with uv
+echo ""
+echo "📦 Creating virtual environment..."
+cd "$VENV_DIR"
+uv venv
+echo "✅ Virtual environment created at $VENV_DIR/.venv"
+
+# Clone MCP Memory Service from GitHub
+echo ""
+echo "📥 Cloning MCP Memory Service from GitHub..."
+TEMP_CLONE="/tmp/mcp-memory-service-$$"
+git clone https://github.com/doobidoo/mcp-memory-service.git "$TEMP_CLONE"
+echo "✅ Cloned repository"
+
+# Install from source
+echo ""
+echo "🔧 Installing MCP Memory Service..."
+cd "$TEMP_CLONE"
+source "$VENV_DIR/.venv/bin/activate"
+uv pip install .
+echo "✅ MCP Memory Service installed successfully"
+
+# Download embedding model (CRITICAL - must be done before first use)
+echo ""
+echo "📥 Downloading embedding model..."
+echo "   This is required for semantic search to work"
+echo "   Model: sentence-transformers/all-MiniLM-L6-v2 (~90MB)"
+echo "   This may take a few minutes on first run..."
+
+"$VENV_DIR/.venv/bin/python" << 'PYTHON_EOF'
+from sentence_transformers import SentenceTransformer
+import os
+
+# Set cache directory
+cache_dir = os.path.expanduser("~/.cache/huggingface")
+os.makedirs(cache_dir, exist_ok=True)
+
+try:
+    # Download and verify model
+    model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder=cache_dir)
+
+    # Test the model works
+    test_embedding = model.encode("test")
+
+    print(f"   ✅ Model downloaded successfully!")
+    print(f"   Cache location: {cache_dir}")
+    print(f"   Embedding dimensions: {len(test_embedding)}")
+except Exception as e:
+    print(f"   ❌ Failed to download model: {e}")
+    print(f"   You may need to download manually later")
+    exit(1)
+PYTHON_EOF
+
+if [ $? -eq 0 ]; then
+    echo "✅ Embedding model ready"
+else
+    echo "⚠️  Model download failed - memory service may not work until model is downloaded"
+    echo "   Run manually: $VENV_DIR/.venv/bin/python -c 'from sentence_transformers import SentenceTransformer; SentenceTransformer(\"all-MiniLM-L6-v2\")'"
+fi
+
+# Cleanup temp clone
+cd /
+rm -rf "$TEMP_CLONE"
+echo "✅ Cleaned up temporary files"
+
+# Create configuration
+echo ""
+echo "📝 Creating configuration..."
+cat > "$MEMORY_DIR/config.json" <<'EOF'
+{
+  "storage": {
+    "backend": "sqlite_vec",
+    "path": "~/.mcp-memory/memory.db",
+    "enable_wal": true
+  },
+  "embeddings": {
+    "provider": "sentence-transformers",
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "local_only": true
+  },
+  "memory_triggers": {
+    "enabled": true,
+    "confidence_threshold": 0.85,
+    "auto_consolidation": true
+  },
+  "search": {
+    "semantic_enabled": true,
+    "hybrid_search": true,
+    "max_results": 10
+  }
+}
+EOF
+echo "✅ Created configuration: $MEMORY_DIR/config.json"
+
+# Add MCP server to Claude Code configuration
+echo ""
+echo "📝 Configuring Claude Code MCP server..."
+
+CLAUDE_CONFIG="$HOME/.claude.json"
+
+if [[ -f "$CLAUDE_CONFIG" ]]; then
+    # Backup existing config
+    cp "$CLAUDE_CONFIG" "$CLAUDE_CONFIG.backup-$(date +%Y%m%d-%H%M%S)"
+    echo "✅ Backed up existing Claude config"
+
+    # Add memory-service using Python
+    python3 << 'PYTHON_EOF'
+import json
+import os
+
+config_path = os.path.expanduser('~/.claude.json')
+
+try:
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+
+    # Ensure mcpServers exists
+    if 'mcpServers' not in config:
+        config['mcpServers'] = {}
+
+    # Remove old openmemory if exists
+    if 'openmemory' in config['mcpServers']:
+        del config['mcpServers']['openmemory']
+        print("   Removed old 'openmemory' MCP server")
+
+    # Add memory-service
+    venv_python = os.path.expanduser('~/.local/mcp-memory-service/.venv/bin/python')
+    config['mcpServers']['memory-service'] = {
+        "type": "stdio",
+        "command": venv_python,
+        "args": ["-m", "mcp_memory_service.server"],
+        "env": {
+            "MCP_MEMORY_STORAGE_BACKEND": "sqlite_vec",
+            "MCP_MEMORY_DB_PATH": os.path.expanduser("~/.mcp-memory/memory.db")
+        }
+    }
+
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
+
+    print("   ✅ Added 'memory-service' to Claude Code MCP servers")
+except Exception as e:
+    print(f"   ⚠️  Failed to update config automatically: {e}")
+    print("   You'll need to add manually - see README")
+PYTHON_EOF
+
+else
+    echo "⚠️  Claude Code config not found at $CLAUDE_CONFIG"
+    echo "   Manual configuration required after first Claude Code launch"
+fi
+
+# Add aliases to shell
+echo ""
+echo "📝 Adding shell aliases..."
+
+ALIASES_FILE="$HOME/.aliases"
+
+if [[ -f "$ALIASES_FILE" ]]; then
+    if ! grep -q "# MCP Memory Service" "$ALIASES_FILE"; then
+        cat >> "$ALIASES_FILE" <<'ALIASEOF'
+
+# ═══════════════════════════════════════════════════════════════
+#  MCP Memory Service
+# ═══════════════════════════════════════════════════════════════
+
+alias memory-status='ls -lh ~/.mcp-memory/memory.db 2>/dev/null && echo "Memories:" && sqlite3 ~/.mcp-memory/memory.db "SELECT COUNT(*) FROM memories;" 2>/dev/null || echo "Database not yet created - will be created on first use"'
+alias memory-backup='cp ~/.mcp-memory/memory.db ~/.config/mcp-memory-backups/memory-$(date +%Y%m%d-%H%M%S).db && echo "Backup created"'
+alias memory-export='~/.local/bin/export-memory-to-obsidian'
+alias memory-config='${EDITOR:-nvim} ~/.mcp-memory/config.json'
+alias memory-logs='tail -f ~/.mcp-memory/logs/*.log 2>/dev/null || echo "No logs yet"'
+
+ALIASEOF
+        echo "✅ Added memory aliases to $ALIASES_FILE"
+    else
+        echo "✅ Memory aliases already exist in $ALIASES_FILE"
+    fi
+else
+    echo "⚠️  ~/.aliases not found - aliases not added"
+fi
+
+# Create README
+cat > "$MEMORY_DIR/README.md" <<'EOF'
+# MCP Memory Service - Quick Reference
+
+## Usage
+
+### MCP Tools Available
+
+**Core Operations:**
+- `memory_store(text, metadata)` - Store a new memory
+- `memory_search(query, limit)` - Semantic search
+- `memory_list(filter)` - List memories
+- `memory_consolidate()` - Run consolidation (weekly)
+
+**Document Management:**
+- `memory_ingest_document(path, metadata)` - Import PDF, TXT, MD, JSON
+- `memory_export(format)` - Export to JSON, Markdown, CSV
+
+## Quick Commands
+
+```bash
+memory-status     # Check database status
+memory-backup     # Create backup
+memory-export     # Export to Obsidian
+memory-config     # Edit configuration
+memory-logs       # View logs
+```
+
+## Configuration
+
+Edit `~/.mcp-memory/config.json` to customize:
+- Embedding provider (sentence-transformers by default)
+- Confidence threshold (0.85 default)
+- Auto-consolidation settings
+
+## Troubleshooting
+
+**Tools not available after restart:**
+- **Most common:** Embedding model not downloaded
+- Fix: `~/.local/mcp-memory-service/.venv/bin/python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"`
+- Then restart Claude Code again
+- Check logs: MCP server logs will show model download errors
+
+**Memory not persisting:**
+- Check: `ls -la ~/.mcp-memory/memory.db`
+- Restart Claude Code
+
+**Slow searches:**
+- Run: `memory_consolidate()`
+- Check DB size: should be < 100MB
+
+**MCP server not starting:**
+- Verify: `grep memory-service ~/.claude.json`
+- Check venv exists: `ls ~/.local/mcp-memory-service/.venv/bin/python`
+- Restart Claude Code
+
+## Full Documentation
+
+See: `~/projects/dotfiles/MEMORY_BANK_GUIDE.md`
+EOF
+
+echo "✅ Created README: $MEMORY_DIR/README.md"
+
+# Summary
+echo ""
+echo "════════════════════════════════════════════════════════════"
+echo "  Installation Complete!"
+echo "════════════════════════════════════════════════════════════"
+echo ""
+echo "📚 Next Steps:"
+echo ""
+echo "1. Restart Claude Code to load the MCP server"
+echo "2. Test with: memory-status"
+echo "3. Read the guide: ~/projects/dotfiles/MEMORY_BANK_GUIDE.md"
+echo ""
+echo "🔗 Resources:"
+echo "   Config:  ~/.mcp-memory/config.json"
+echo "   DB:      ~/.mcp-memory/memory.db (created on first use)"
+echo "   Guide:   ~/.mcp-memory/README.md"
+echo "   Backups: ~/.config/mcp-memory-backups/"
+echo ""
+echo "💡 Shell aliases available:"
+echo "   source ~/.aliases  # Then use: memory-status, memory-backup, etc."
+echo ""
+echo "════════════════════════════════════════════════════════════"

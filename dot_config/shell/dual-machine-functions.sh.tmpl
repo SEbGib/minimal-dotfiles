@@ -1,0 +1,311 @@
+{{- if or (index . "personal") (index . "work") }}
+#!/bin/bash
+# Dual-Machine Helper Functions
+# Advanced functions for Mac + Ubuntu dual-machine workflow
+
+{{- if index . "personal" }}
+# ===== PERSONAL MAC FUNCTIONS =====
+
+# Quick work connection with tmux session management
+work_connect() {
+    local session_name="${1:-work}"
+    echo "🔗 Connecting to work machine..."
+    ssh -t {{ .work_username }}@{{ .work_server_ip }} "cd ~/code && tmux attach-session -t $session_name || tmux new-session -s $session_name"
+}
+
+# Copy files to work machine
+work_copy() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: work_copy <local_file> <remote_path>"
+        echo "Example: work_copy ./project.zip ~/uploads/"
+        return 1
+    fi
+
+    local local_file="$1"
+    local remote_path="$2"
+
+    echo "  Copying $local_file to work machine..."
+    rsync -avz --progress "$local_file" "{{ .work_username }}@{{ .work_server_ip }}:$remote_path"
+}
+
+# Download files from work machine
+work_download() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: work_download <remote_file> <local_path>"
+        echo "Example: work_download ~/reports/data.csv ./downloads/"
+        return 1
+    fi
+
+    local remote_file="$1"
+    local local_path="$2"
+
+    echo "📥 Downloading $remote_file from work machine..."
+    rsync -avz --progress "{{ .work_username }}@{{ .work_server_ip }}:$remote_file" "$local_path"
+}
+
+# Monitor work machine resources
+work_monitor() {
+    echo "  Work machine system status:"
+    ssh {{ .work_username }}@{{ .work_server_ip }} "
+        echo '   Hostname: \$(hostname)'
+        echo '📅 Uptime: \$(uptime -p)'
+        echo '💾 Memory:'
+        free -h | grep -E 'Mem:|Swap:'
+        echo '💿 Disk Usage:'
+        df -h | grep -E '/$|/home'
+        echo '  CPU Load:'
+        top -bn1 | head -3 | tail -1
+        echo '🌡️  Temperature (if available):'
+        sensors 2>/dev/null | grep -E 'temp|Core' | head -3 || echo 'No temperature sensors found'
+        echo '📡 Network:'
+        ip route get 1 | awk '{print \"Local IP:\", \$7}' 2>/dev/null || echo 'IP detection failed'
+    "
+}
+
+# Start complete dual-machine workflow
+start_dual_workflow() {
+    echo "  Starting dual-machine development workflow..."
+
+    # 1. Start Barrier server
+    echo "🖱️ Starting Barrier server..."
+    start-barrier-server &
+
+    # 2. Check work machine availability
+    echo "  Checking work machine..."
+    if ping -c 1 {{ .work_server_ip }} >/dev/null 2>&1; then
+        echo "  Work machine is reachable"
+    else
+        echo "  Work machine is not reachable"
+        return 1
+    fi
+
+    # 3. Test SSH connection
+    echo "🔐 Testing SSH connection..."
+    if ssh -o ConnectTimeout=5 {{ .work_username }}@{{ .work_server_ip }} "echo 'SSH OK'" >/dev/null 2>&1; then
+        echo "  SSH connection OK"
+    else
+        echo "  SSH connection failed"
+        return 1
+    fi
+
+    echo "🎉 Dual-machine workflow ready!"
+    echo ""
+    echo "Next steps:"
+    echo "1. Move mouse to screen edge to switch to Ubuntu"
+    echo "2. Run 'work' command to connect via SSH"
+    echo "3. Use 'barrier-status' to check mouse/keyboard sharing"
+}
+
+{{- else if index . "work" }}
+# ===== WORK UBUNTU FUNCTIONS =====
+
+# Setup work development session
+setup_work_session() {
+    local session_name="${1:-work}"
+    echo "💼 Setting up work development session: $session_name"
+
+    # Create or attach to work session
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        echo "📎 Attaching to existing session: $session_name"
+        tmux attach-session -t "$session_name"
+    else
+        echo "🆕 Creating new work session: $session_name"
+        tmux new-session -d -s "$session_name" -n "nvim" -c "$HOME/code"
+        tmux new-window -t "$session_name:2" -n "shell" -c "$HOME/code"
+        tmux new-window -t "$session_name:3" -n "logs"
+        tmux new-window -t "$session_name:4" -n "misc"
+
+        # Start nvim in first window
+        tmux send-keys -t "$session_name:1" "nvim" Enter
+
+        # Start logs in third window
+        tmux send-keys -t "$session_name:3" "tail -f /var/log/syslog" Enter
+
+        # Select first window and attach
+        tmux select-window -t "$session_name:1"
+        tmux attach-session -t "$session_name"
+    fi
+}
+
+# Save current work state
+save_work_state() {
+    local timestamp=$(date +%Y%m%d-%H%M%S)
+    local backup_dir="$HOME/.work-backups"
+
+    mkdir -p "$backup_dir"
+
+    echo "💾 Saving work state..."
+
+    # Save tmux session
+    if tmux has-session -t work 2>/dev/null; then
+        tmux capture-pane -t work -p > "$backup_dir/tmux-work-$timestamp.txt"
+        echo "  Tmux session saved to $backup_dir/tmux-work-$timestamp.txt"
+    fi
+
+    # Save nvim session if available
+    if [[ -f "$HOME/.config/nvim/work-session.vim" ]]; then
+        cp "$HOME/.config/nvim/work-session.vim" "$backup_dir/nvim-session-$timestamp.vim"
+        echo "  Nvim session backed up"
+    fi
+
+    # Save current directory and git status
+    echo "Current directory: $(pwd)" > "$backup_dir/context-$timestamp.txt"
+    echo "Git status:" >> "$backup_dir/context-$timestamp.txt"
+    git status 2>/dev/null >> "$backup_dir/context-$timestamp.txt" || echo "Not a git repository" >> "$backup_dir/context-$timestamp.txt"
+
+    echo "📂 Work state saved to $backup_dir/"
+}
+
+# Restore work state
+restore_work_state() {
+    local backup_dir="$HOME/.work-backups"
+
+    if [[ ! -d "$backup_dir" ]]; then
+        echo "  No backup directory found"
+        return 1
+    fi
+
+    echo "  Available backups:"
+    ls -la "$backup_dir" | grep -E "(tmux|nvim|context)" | tail -5
+
+    echo ""
+    echo "To restore a specific session:"
+    echo "  nvim session: source ~/.work-backups/nvim-session-TIMESTAMP.vim"
+    echo "  tmux session: Use setup_work_session to recreate"
+}
+
+# Start work environment with Barrier client
+start_work_environment() {
+    echo "💼 Starting work environment..."
+
+    # 1. Start Barrier client
+    echo "🖱️ Starting Barrier client..."
+    start-barrier-client &
+
+    # 2. Setup work session
+    echo "📺 Setting up tmux work session..."
+    setup_work_session
+}
+
+{{- end }}
+
+# ===== SHARED FUNCTIONS =====
+
+# Network diagnostics for dual-machine setup
+network_diag() {
+    echo "🌐 Network Diagnostics for Dual-Machine Setup"
+    echo "=============================================="
+
+    # Local network info
+    echo "📍 Local Machine Info:"
+    echo "  Hostname: $(hostname)"
+    {{- if eq .chezmoi.os "darwin" }}
+    echo "  Local IP: $(ipconfig getifaddr en0 2>/dev/null || echo 'Not connected')"
+    {{- else }}
+    echo "  Local IP: $(hostname -I | cut -d' ' -f1 2>/dev/null || echo 'Not connected')"
+    {{- end }}
+
+    # Gateway and DNS
+    echo ""
+    echo "🚪 Network Gateway:"
+    {{- if eq .chezmoi.os "darwin" }}
+    route get default | grep gateway || echo "No gateway found"
+    {{- else }}
+    ip route | grep default || echo "No default route found"
+    {{- end }}
+
+    echo ""
+    echo "  DNS Resolution:"
+    nslookup google.com | head -5
+
+    # Test connectivity
+    echo ""
+    echo "🔗 Connectivity Tests:"
+    ping -c 2 8.8.8.8 >/dev/null 2>&1 && echo "  Internet: OK" || echo "  Internet: Failed"
+    ping -c 2 192.168.1.1 >/dev/null 2>&1 && echo "  Gateway: OK" || echo "  Gateway: Failed"
+
+    {{- if index . "personal" }}
+    ping -c 2 {{ .work_server_ip }} >/dev/null 2>&1 && echo "  Work machine: OK" || echo "  Work machine: Failed"
+    {{- else if index . "work" }}
+    ping -c 2 {{ .barrier_server_ip }} >/dev/null 2>&1 && echo "  Mac server: OK" || echo "  Mac server: Failed"
+    {{- end }}
+}
+
+# Show dual-machine setup status
+dual_status() {
+    echo "  Dual-Machine Setup Status"
+    echo "============================="
+
+    # Machine type
+    {{- if index . "personal" }}
+    echo "  Machine Type: Personal Mac (Development Controller)"
+    {{- else if index . "work" }}
+    echo "  Machine Type: Work Ubuntu (Remote Development Target)"
+    {{- end }}
+
+    # SSH status
+    echo ""
+    echo "🔐 SSH Environment:"
+    [[ -n "$SSH_CLIENT" ]] && echo "  SSH Client: $SSH_CLIENT" || echo "  SSH Client: Not detected"
+    [[ -n "$SSH_TTY" ]] && echo "  SSH TTY: $SSH_TTY" || echo "  SSH TTY: Not detected"
+
+    # Tmux status
+    echo ""
+    echo "📺 Tmux Sessions:"
+    if command -v tmux >/dev/null 2>&1; then
+        tmux list-sessions 2>/dev/null || echo "  No active tmux sessions"
+    else
+        echo "  Tmux not available"
+    fi
+
+    # Barrier status
+    echo ""
+    barrier-status.sh 2>/dev/null || echo "🖱️ Barrier: Not running or not available"
+}
+
+# Quick help for dual-machine commands
+dual_help() {
+    echo "  Dual-Machine Setup - Quick Reference"
+    echo "======================================="
+    echo ""
+
+    {{- if index . "personal" }}
+    echo "  Personal Mac Commands:"
+    echo "  work                 - Connect to work machine with tmux"
+    echo "  work-ssh            - Plain SSH to work machine"
+    echo "  work-copy <file>    - Copy file to work machine"
+    echo "  work-download <file> - Download file from work machine"
+    echo "  work-monitor        - Check work machine resources"
+    echo "  start_dual_workflow - Start complete workflow"
+    echo "  barrier-start       - Start mouse/keyboard sharing"
+    echo ""
+    {{- else if index . "work" }}
+    echo "💼 Work Ubuntu Commands:"
+    echo "  setup_work_session  - Create organized tmux session"
+    echo "  save_work_state     - Backup current work state"
+    echo "  restore_work_state  - Show available backups"
+    echo "  start_work_environment - Start tmux + Barrier"
+    echo ""
+    {{- end }}
+
+    echo "  Shared Commands:"
+    echo "  dual_status         - Show setup status"
+    echo "  network_diag        - Network diagnostics"
+    echo "  barrier-status      - Check mouse/keyboard sharing"
+    echo "  barrier-restart     - Restart Barrier"
+    echo "  dual_help           - Show this help"
+    echo ""
+    echo "For more details, see: ~/.config/shell/dual-machine-functions.sh"
+}
+
+# Auto-completion for main functions
+if [[ -n "$ZSH_VERSION" ]] && command -v compdef &> /dev/null; then
+    # Zsh completion (only if compdef is available)
+    compdef '_alternative "functions:functions:(work_connect work_copy work_download work_monitor setup_work_session save_work_state)"' work_connect
+elif [[ -n "$BASH_VERSION" ]] && command -v complete &> /dev/null; then
+    # Bash completion
+    complete -W "work_connect work_copy work_download work_monitor setup_work_session save_work_state dual_status network_diag dual_help" work_connect
+fi
+
+echo "  Dual-machine functions loaded"
+{{- end }}

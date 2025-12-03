@@ -1,0 +1,23 @@
+# rainfrog configuration
+# PostgreSQL database connections for local development projects
+
+[db]
+# ========================================
+# PFR (Platform for Retail) - Main Project
+# ========================================
+
+# PFR API - Main application database
+pfr-api = { host = "localhost", driver = "postgres", port = 5435, database = "app", username = "symfony", default = true }
+
+# PFR API - Datamart database (analytics/reporting)
+pfr-datamart = { host = "localhost", driver = "postgres", port = 5442, database = "db", username = "symfony_pfr", default = false }
+
+# ========================================
+# ICATE (Incentive Catalog) - Secondary Project
+# ========================================
+
+# ICATE API - Main application database
+icate-api = { host = "localhost", driver = "postgres", port = 5436, database = "app", username = "symfony", default = false }
+
+# ICATE API - Datamart database
+icate-datamart = { host = "localhost", driver = "postgres", port = 5443, database = "db", username = "gazelleretail", default = false }

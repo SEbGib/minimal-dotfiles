@@ -1,0 +1,106 @@
+{{- if index . "work" }}
+-- SSH Remote Development Configuration
+-- This file is only included on work machines
+
+local M = {}
+
+-- SSH Environment Detection
+M.is_ssh = os.getenv('SSH_CLIENT') ~= nil or os.getenv('SSH_TTY') ~= nil
+M.is_remote = M.is_ssh or vim.env.TMUX ~= nil
+
+-- SSH-specific optimizations
+function M.setup_ssh_optimizations()
+  if not M.is_ssh then
+    return
+  end
+
+  -- Optimize for network latency
+  vim.opt.updatetime = 1000
+  vim.opt.timeoutlen = 500
+  vim.opt.ttimeoutlen = 50
+  vim.opt.lazyredraw = true
+
+  -- Better session management for SSH
+  vim.opt.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,terminal"
+
+  -- Auto-save more frequently in SSH environment
+  vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {
+    pattern = "*",
+    callback = function()
+      if vim.bo.modified and vim.bo.buftype == "" then
+        vim.defer_fn(function()
+          if vim.bo.modified then
+            vim.cmd("silent! write")
+          end
+        end, 1000)
+      end
+    end,
+  })
+
+  -- Connection status monitoring
+  vim.api.nvim_create_user_command("SSHStatus", function()
+    local ssh_client = vim.env.SSH_CLIENT or "Not detected"
+    local ssh_tty = vim.env.SSH_TTY or "Not detected"
+    vim.notify(string.format("SSH Client: %s\nSSH TTY: %s", ssh_client, ssh_tty), vim.log.levels.INFO, {
+      title = "SSH Connection Status"
+    })
+  end, {})
+
+  print("🚀 SSH optimizations loaded")
+end
+
+-- Work session management
+function M.setup_work_sessions()
+  -- Auto-restore work session
+  vim.api.nvim_create_autocmd("VimEnter", {
+    nested = true,
+    callback = function()
+      if vim.fn.argc() == 0 and vim.fn.filereadable(vim.fn.expand("~/.config/nvim/work-session.vim")) == 1 then
+        vim.defer_fn(function()
+          vim.cmd("silent! source ~/.config/nvim/work-session.vim")
+          vim.notify("📂 Work session restored", vim.log.levels.INFO)
+        end, 100)
+      end
+    end,
+  })
+
+  -- Create keymaps for session management
+  vim.keymap.set("n", "<leader>ss", ":mksession! ~/.config/nvim/work-session.vim<CR>",
+    { desc = "Save work session" })
+  vim.keymap.set("n", "<leader>sr", ":source ~/.config/nvim/work-session.vim<CR>",
+    { desc = "Restore work session" })
+end
+
+-- Work-specific keymaps and commands
+function M.setup_work_keymaps()
+  -- Quick connection to personal machine (if needed)
+  vim.api.nvim_create_user_command("ConnectPersonal", function()
+    vim.cmd("terminal ssh personal-mac")
+  end, {})
+
+  -- Git shortcuts for work workflows
+  vim.keymap.set("n", "<leader>gw", ":!git add . && git commit -m 'WIP: work in progress'<CR>",
+    { desc = "Quick WIP commit" })
+
+  -- Project navigation shortcuts
+  vim.keymap.set("n", "<leader>pw", ":cd ~/work<CR>:Telescope find_files<CR>",
+    { desc = "Navigate to work projects" })
+end
+
+-- Initialize all work-specific configurations
+function M.init()
+  if M.is_ssh then
+    M.setup_ssh_optimizations()
+  end
+
+  M.setup_work_sessions()
+  M.setup_work_keymaps()
+
+  vim.notify("🖥️ Work environment initialized", vim.log.levels.INFO, {
+    title = "Remote Development Setup",
+    timeout = 2000
+  })
+end
+
+return M
+{{- end }}

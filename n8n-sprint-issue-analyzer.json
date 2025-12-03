@@ -1,0 +1,374 @@
+{
+  "name": "Sprint Issue Analyzer → Obsidian",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000001",
+      "name": "Schedule Trigger (Lundi 9h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": ""
+    },
+    {
+      "parameters": {},
+      "id": "e3b7c0a0-1234-4567-89ab-000000000002",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://gitlab.com/api/v4/projects/microdon%2Fretail%2Fpfr-api/issues?milestone={{ $now.format('yyyy') }}-Sprint-{{ $now.format('ww') }}&state=opened&per_page=100",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gitLabApi",
+        "options": {}
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000003",
+      "name": "Fetch Sprint Issues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 400],
+      "notes": "✅ FIXED: glab CLI → GitLab API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse HTTP response and filter issues\nconst issues = $input.all();\n\n// Filter: Keep only issues that need analysis\n// Criteria: Has label \"Board::Groomed\" or \"Tech::To Analyze\"\nconst filteredIssues = issues.filter(item => {\n  const issue = item.json;\n  const labels = issue.labels || [];\n  const hasGroomed = labels.some(l => l.includes('Board::Groomed'));\n  const needsAnalysis = labels.some(l => l.includes('Tech::To Analyze'));\n  const notDone = !labels.some(l => l.includes('Board::Done'));\n  \n  return (hasGroomed || needsAnalysis) && notDone;\n});\n\n// Transform to simpler structure\nreturn filteredIssues.map(item => {\n  const issue = item.json;\n  return {\n    json: {\n      issue_id: issue.iid,\n      issue_number: issue.references?.full || `#${issue.iid}`,\n      title: issue.title,\n      web_url: issue.web_url,\n      state: issue.state,\n      labels: issue.labels,\n      assignees: (issue.assignees || []).map(a => a.username),\n      weight: issue.weight || 0,\n      epic: issue.epic?.title || 'No epic',\n      milestone: issue.milestone?.title || 'No milestone'\n    }\n  };\n});"
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000004",
+      "name": "Parse and Filter Issues",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 400],
+      "notes": "✅ FIXED: Adapted for HTTP response"
+    },
+    {
+      "parameters": {
+        "batchSize": 3,
+        "options": {}
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000005",
+      "name": "Loop Issues (batch 3)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://gitlab.com/api/v4/projects/microdon%2Fretail%2Fpfr-api/issues/{{ $json.issue_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gitLabApi",
+        "options": {}
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000006",
+      "name": "Fetch Issue Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 400],
+      "alwaysOutputData": true,
+      "notes": "✅ FIXED: glab CLI → GitLab API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract detailed information from GitLab API response\nconst issueDetails = $input.item.json;\n\n// Enrichir les données (la réponse HTTP est déjà parsée)\nreturn [{\n  json: {\n    ...$('Parse and Filter Issues').item.json,\n    description: issueDetails.description || 'No description',\n    author: issueDetails.author?.username || 'unknown',\n    created_at: issueDetails.created_at,\n    updated_at: issueDetails.updated_at,\n    time_stats: {\n      estimate: issueDetails.time_stats?.human_time_estimate || 'Not estimated',\n      spent: issueDetails.time_stats?.human_total_time_spent || '0h'\n    },\n    related_mrs: (issueDetails.related_merge_requests || []).length,\n    discussion_count: issueDetails.user_notes_count || 0\n  }\n}];"
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000007",
+      "name": "Extract Issue Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400],
+      "notes": "✅ FIXED: Reads HTTP response directly"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate technical analysis markdown (simplified, no external Claude call)\nconst data = $input.item.json;\n\n// Helper: Parse description for technical details\nfunction extractTechnicalDetails(description) {\n  const sections = {\n    context: '',\n    acceptance: '',\n    technical: ''\n  };\n  \n  const contextMatch = description.match(/##\\s*Contexte[\\s\\S]*?(?=##|$)/i);\n  const acceptanceMatch = description.match(/##\\s*Critères d'acceptation[\\s\\S]*?(?=##|$)/i);\n  const techMatch = description.match(/##\\s*Notes techniques[\\s\\S]*?(?=##|$)/i);\n  \n  if (contextMatch) sections.context = contextMatch[0].trim();\n  if (acceptanceMatch) sections.acceptance = acceptanceMatch[0].trim();\n  if (techMatch) sections.technical = techMatch[0].trim();\n  \n  return sections;\n}\n\n// Helper: Generate subtasks based on weight\nfunction generateSubtasks(weight, description) {\n  const subtasks = [];\n  const baseWeight = weight || 3;\n  \n  subtasks.push({ name: 'Analyse technique et conception', weight: Math.ceil(baseWeight * 0.2) });\n  subtasks.push({ name: 'Implémentation backend', weight: Math.ceil(baseWeight * 0.4) });\n  subtasks.push({ name: 'Tests unitaires et fonctionnels', weight: Math.ceil(baseWeight * 0.2) });\n  subtasks.push({ name: 'Documentation et code review', weight: Math.ceil(baseWeight * 0.2) });\n  \n  // Add extra subtasks if description mentions frontend\n  if (description.toLowerCase().includes('frontend') || description.toLowerCase().includes('ui')) {\n    subtasks.push({ name: 'Implémentation frontend', weight: Math.ceil(baseWeight * 0.3) });\n  }\n  \n  return subtasks;\n}\n\nconst sections = extractTechnicalDetails(data.description);\nconst subtasks = generateSubtasks(data.weight, data.description);\n\n// Generate markdown\nconst markdown = `---\ntags: [sprint-prep, gitlab-issue, ${data.milestone.toLowerCase().replace(/\\s+/g, '-')}]\ncreated: ${new Date().toISOString()}\nissue: ${data.issue_number}\n---\n\n# ${data.title}\n\n**Issue**: [${data.issue_number}](${data.web_url})\n**Epic**: ${data.epic}\n**Weight**: ${data.weight} points\n**Milestone**: ${data.milestone}\n**Assignees**: ${data.assignees.join(', ') || 'Unassigned'}\n**Status**: ${data.state}\n\n## 📋 Résumé Technique\n\n${sections.context || 'Contexte à définir'}\n\n## ✅ Critères d'Acceptation\n\n${sections.acceptance || 'Critères à définir'}\n\n## 🔧 Notes Techniques\n\n${sections.technical || 'Notes techniques à compléter'}\n\n## 📊 Découpage en Sous-tâches\n\n${subtasks.map((task, i) => `### ${i + 1}. ${task.name} (${task.weight}pts)\\n\\n- [ ] À définir lors du grooming\\n`).join('\\n')}\n\n**Total estimé**: ${subtasks.reduce((sum, t) => sum + t.weight, 0)} points\n\n## 🔗 Dépendances Identifiées\n\n- **MRs liées**: ${data.related_mrs} merge request(s)\n- **Discussions**: ${data.discussion_count} commentaire(s)\n\n> ⚠️ Vérifier les dépendances avec les autres issues du sprint\n\n## ⚡ Points d'Attention\n\n- [ ] Impact sur les APIs existantes ?\n- [ ] Migration de données nécessaire ?\n- [ ] Documentation à mettre à jour ?\n- [ ] Tests de non-régression ?\n\n## 📈 Métadonnées\n\n- **Auteur**: ${data.author}\n- **Créée le**: ${new Date(data.created_at).toLocaleDateString('fr-FR')}\n- **Dernière MàJ**: ${new Date(data.updated_at).toLocaleDateString('fr-FR')}\n- **Time tracking**: ${data.time_stats.estimate} estimé, ${data.time_stats.spent} passé\n\n---\n\n*Analyse générée automatiquement par n8n workflow*\n*Compléter manuellement lors du sprint grooming*\n`;\n\nreturn [{\n  json: {\n    ...data,\n    analysis_content: markdown,\n    filename: `sprint-prep-issue-${data.issue_id}-${new Date().toISOString().split('T')[0]}.md`\n  }\n}];"
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000008",
+      "name": "Generate Analysis Markdown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 400],
+      "alwaysOutputData": true,
+      "notes": "✅ FIXED: Removed Claude CLI dependency, pure JS generation"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8765/write-file",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"path\": \"/home/sebastien/Obsidian/01-Projects/pfr-api/Daily-Reports/{{ $json.filename }}\",\n  \"content\": {{ $json.analysis_content | jsonStringify }}\n}",
+        "options": {}
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000011",
+      "name": "Save to Obsidian",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 400],
+      "alwaysOutputData": true,
+      "disabled": true,
+      "notes": "⚠️ REQUIRES: File writing service on host. Enable if available, or use alternative method (see instructions)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "all_processed",
+              "leftValue": "={{ $('Loop Issues (batch 3)').item.json.completed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000013",
+      "name": "Check if All Done",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1850, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate results from all processed issues\nconst allItems = $input.all();\nconst processedIssues = allItems.filter(item => item.json.issue_id);\n\nconst summary = {\n  total_issues: processedIssues.length,\n  total_weight: processedIssues.reduce((sum, item) => sum + (item.json.weight || 0), 0),\n  issues: processedIssues.map(item => ({\n    id: item.json.issue_number,\n    title: item.json.title,\n    weight: item.json.weight,\n    epic: item.json.epic\n  }))\n};\n\nconst summaryMd = `# Sprint Preparation Summary - ${new Date().toISOString().split('T')[0]}\n\n**Total Issues Analyzed**: ${summary.total_issues}\n**Total Weight**: ${summary.total_weight}\n\n## Issues\n\n${summary.issues.map(i => `- [${i.id}] ${i.title} (Weight: ${i.weight}, Epic: ${i.epic})`).join('\\n')}\n\n---\n\n*Generated automatically by n8n workflow*\n*See individual analysis files in Daily-Reports/*\n`;\n\nreturn [{\n  json: {\n    summary: summaryMd,\n    count: summary.total_issues,\n    total_weight: summary.total_weight,\n    filename: `sprint-summary-${new Date().toISOString().split('T')[0]}.md`\n  }\n}];"
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000014",
+      "name": "Generate Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8765/write-file",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"path\": \"/home/sebastien/Obsidian/01-Projects/pfr-api/Daily-Reports/{{ $json.filename }}\",\n  \"content\": {{ $json.summary | jsonStringify }}\n}",
+        "options": {}
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000015",
+      "name": "Save Summary to Obsidian",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 300],
+      "alwaysOutputData": true,
+      "disabled": true,
+      "notes": "⚠️ REQUIRES: File writing service on host. Enable if available, or use alternative method (see instructions)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/YOUR_WEBHOOK_URL",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=📋 **Sprint Preparation Complete**\\n\\n✅ Analyzed {{ $json.count }} issues ({{ $json.total_weight }} points)\\n\\n🔗 Files saved to Daily-Reports/"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e3b7c0a0-1234-4567-89ab-000000000016",
+      "name": "Discord Notification (Optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2450, 300],
+      "disabled": true,
+      "notes": "⚙️ OPTIONAL: Configure Discord webhook URL and enable"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Lundi 9h)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Sprint Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Sprint Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Sprint Issues": {
+      "main": [
+        [
+          {
+            "node": "Parse and Filter Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and Filter Issues": {
+      "main": [
+        [
+          {
+            "node": "Loop Issues (batch 3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Issues (batch 3)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Issue Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Issue Details": {
+      "main": [
+        [
+          {
+            "node": "Extract Issue Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Issue Info": {
+      "main": [
+        [
+          {
+            "node": "Generate Analysis Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Analysis Markdown": {
+      "main": [
+        [
+          {
+            "node": "Save to Obsidian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Obsidian": {
+      "main": [
+        [
+          {
+            "node": "Check if All Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if All Done": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Issues (batch 3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary": {
+      "main": [
+        [
+          {
+            "node": "Save Summary to Obsidian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Summary to Obsidian": {
+      "main": [
+        [
+          {
+            "node": "Discord Notification (Optional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2025-01-29T00:00:00.000Z",
+      "updatedAt": "2025-01-29T00:00:00.000Z",
+      "id": "sprint-automation",
+      "name": "Sprint Automation"
+    },
+    {
+      "createdAt": "2025-01-29T00:00:00.000Z",
+      "updatedAt": "2025-01-29T00:00:00.000Z",
+      "id": "gitlab",
+      "name": "GitLab"
+    },
+    {
+      "createdAt": "2025-01-29T00:00:00.000Z",
+      "updatedAt": "2025-01-29T00:00:00.000Z",
+      "id": "obsidian",
+      "name": "Obsidian"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-30T00:00:00.000Z",
+  "versionId": ""
+}

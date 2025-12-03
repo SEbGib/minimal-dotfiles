@@ -1,0 +1,36 @@
+# Personal configurations (never commit)
+private_dot_env.tmpl
+private_dot_ssh/config.tmpl
+
+# Chezmoi runtime
+.crush/
+bin/
+
+# Build artifacts
+*.log
+*.swp
+*.swo
+*~
+
+# Dependencies
+node_modules/
+.npm/
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.sublime-*
+
+# Test files
+test-results/
+coverage/
+
+# Backup files
+*.bak
+*.backup
+CLAUDE.md.bak

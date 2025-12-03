@@ -1,0 +1,5 @@
+# GitHub specific configuration
+{{- $email := "your.email@gmail.com" }}
+{{- if hasKey . "github_email" }}{{ $email = .github_email }}{{ else if hasKey . "email" }}{{ $email = .email }}{{ end }}
+[user]
+    email = {{ $email }}

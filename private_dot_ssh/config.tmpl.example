@@ -1,0 +1,73 @@
+# SSH Configuration - Managed by chezmoi
+# Auto-generated based on machine type (personal/work)
+
+# Global SSH settings
+Host *
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    ControlMaster auto
+    ControlPath ~/.ssh/master-%r@%h:%p
+    ControlPersist 10m
+    AddKeysToAgent yes
+{{- if eq .chezmoi.os "darwin" }}
+    UseKeychain yes
+{{- end }}
+
+{{- if (index . "personal" | default false) }}
+# Personal Mac configuration for connecting to work Ubuntu machine
+Host ubuntu-work work
+    HostName UBUNTU_WORK_IP_ADDRESS  # Replace with actual IP
+    User YOUR_WORK_USERNAME          # Replace with actual username
+    ForwardAgent yes
+    ForwardX11 yes
+    RemoteForward 52224 127.0.0.1:52224  # Clipboard sync
+    ServerAliveInterval 30
+    ControlMaster auto
+    ControlPath ~/.ssh/master-%r@%h:%p
+    ControlPersist 10m
+    IdentityFile ~/.ssh/id_ed25519
+
+# Quick tmux work session alias
+Host work-dev
+    HostName UBUNTU_WORK_IP_ADDRESS
+    User YOUR_WORK_USERNAME
+    RequestTTY yes
+    RemoteCommand tmux attach-session -t work || tmux new-session -s work
+    ForwardAgent yes
+    RemoteForward 52224 127.0.0.1:52224
+
+{{- end }}
+
+{{- if (index . "work" | default false) }}
+# Work Ubuntu machine configuration
+# Add work-specific SSH configurations here if needed
+
+{{- end }}
+
+# GitHub configuration
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    AddKeysToAgent yes
+
+# GitLab configuration
+Host gitlab.com
+    HostName gitlab.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    AddKeysToAgent yes
+
+# GitLab SK5 (prestataire)
+Host gitlab.yourcompany.example.com ssh.gitlab.yourcompany.example.com work-gitlab
+    HostName ssh.gitlab.yourcompany.example.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_work-gitlab
+    AddKeysToAgent yes
+
+# Security settings
+Host *
+    Protocol 2
+    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+    MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512
+    KexAlgorithms curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512

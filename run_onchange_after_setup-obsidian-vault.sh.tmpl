@@ -1,0 +1,24 @@
+#!/bin/bash
+# Setup Obsidian vault directory structure
+# This creates empty directories that are not managed by chezmoi
+
+set -euo pipefail
+
+echo "📁 Setting up Obsidian vault directories..."
+
+# Create directories that should exist but are not managed by chezmoi
+# (user content directories)
+mkdir -p "$HOME/Obsidian/Dev"/{Daily,References,Archives,Attachments}
+
+echo "✅ Obsidian vault directories created"
+echo ""
+echo "Vault structure:"
+echo "  ~/Obsidian/Dev/"
+echo "  ├── .obsidian/      ← Managed by chezmoi"
+echo "  ├── Templates/      ← Managed by chezmoi"
+echo "  ├── Projects/       ← Managed by chezmoi (initial notes)"
+echo "  ├── Tech/           ← Managed by chezmoi (initial notes)"
+echo "  ├── Daily/          ← Your daily notes (not synced)"
+echo "  ├── References/     ← Your references (not synced)"
+echo "  ├── Archives/       ← Your archives (not synced)"
+echo "  └── Attachments/    ← Your attachments (not synced)"
