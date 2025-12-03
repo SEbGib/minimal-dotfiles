@@ -5,9 +5,6 @@ A clean, modern development environment setup for macOS and Linux with Neovim, t
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Chezmoi](https://img.shields.io/badge/managed%20with-chezmoi-blue)](https://www.chezmoi.io/)
 
-> **Note:** This is a **public-ready, minimal version** without proprietary AI agents/plugins.
-> For personal configurations, see the private repository.
-
 ---
 
 ## ⚠️ Before You Start
@@ -68,10 +65,10 @@ A clean, modern development environment setup for macOS and Linux with Neovim, t
 - **MCP Memory Service** - Persistent memory for AI tools (requires Claude Code)
 - **Obsidian** - Knowledge management (optional install)
 
-### ❌ Not Included (Private Version Only)
-- Claude Code/OpenCode agents and custom workflows
-- Personal automation plugins
-- Internal documentation and session histories
+### ❌ Not Included
+- Claude Code/OpenCode agents (these require proprietary tools)
+- Custom automation workflows
+- Session-specific documentation
 
 ---
 
