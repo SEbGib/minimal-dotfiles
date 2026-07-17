@@ -34,3 +34,6 @@ coverage/
 *.bak
 *.backup
 CLAUDE.md.bak
+.phpunit.cache/
+.php-cs-fixer.cache
+.phpunit.result.cache
